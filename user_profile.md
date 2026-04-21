@@ -8,10 +8,10 @@
 
 ## 0. 元信息
 - 画像创建时间：2026-04-15
-- 最近更新时间：2026-04-21
-- 画像完整度自评（0–100）：80
-  - 计算依据：§4 项目 2 已确立方向并写入骨架描述（此前为【待补充】）；§11 缺口已由 JD 匹配更新
-- 更新人：OfferClaw（§4 项目 2 方向确立 + §3 RAG 技能标注更新 + 元信息同步）
+- 最近更新时间：2026-04-22
+- 画像完整度自评（0–100）：82
+  - 计算依据：§4 项目 2 从【待补充】→ 完整写入（含 FastAPI 接口层）；§3 技能自评更新（Agent/API/RAG 从"仅了解"→"实战中"）
+- 更新人：OfferClaw（§4 项目 2 完成描述 + §3 技能更新 + metadata 同步）
 
 ---
 
@@ -54,9 +54,9 @@
   - 其他：GPT
 - AI / LLM 相关技能：
   - Prompt 工程：了解有一定实战 
-  - Agent / Workflow：仅了解
-  - 模型 API 调用：仅了解
-  - RAG / 向量检索：仅了解（2026-04-22 开始实战：ChromaDB + Embedding API + 检索链路）
+  - Agent / Workflow：2/5（rag_agent.py 实战：工具调用循环 + 多轮对话）
+  - 模型 API 调用：2/5（JWT 签名 + Embedding 批量调用 + LLM 对话）
+  - RAG / 向量检索：2/5（2026-04-22 完成 ChromaDB ingest + 检索全链路）（2026-04-22 开始实战：ChromaDB + Embedding API + 检索链路）
 - 科研 / 算法工具：MATLAB（常用，用于科研和算法实验）
 - 其他：能熟练使用各类AI问题完成日常工作学习需求，并可以训练大模型完成较为复杂的科研任务
 - 自学能力强
@@ -85,21 +85,23 @@
     - 作为 OfferClaw 项目（LLM 求职作战 Agent）代码实现层的基础，为后续画像查询 / JD 匹配工具接入预留接口
 - 项目 2
   - 名称：OfferClaw RAG 检索增强系统
-  - 时间：2026-04-22 启动
+  - 时间：2026-04
   - 角色：独立开发
-  - 技术栈：Python 3.10 / ChromaDB / 智谱 Embedding API (glm-4-embed) / LangChain RecursiveCharacterTextSplitter / 智谱 GLM-4-Flash API
+  - 技术栈：Python 3.10 / ChromaDB / 智谱 Embedding API (embedding-3) / LangChain TextSplitter / 智谱 GLM-4-Flash API / FastAPI
   - 做了什么：
-    - 将 OfferClaw 的核心 .md 文件（user_profile / daily_log / SOUL / target_rules / source_policy 等）作为文档源
-    - 实现文档 ingest 管线：读取 Markdown → 智能分块 → Embedding 向量化 → 存入 ChromaDB
-    - 实现 RAG 检索链路：用户自然语言提问 → 向量化 → top_k 检索 → 基于检索片段由 LLM 整合回答
-    - 将 RAG 检索集成到 OfferClaw 对话流：先检索后回答，无相关片段时回退到原 Agent 工具调用
-    - 实现检索结果溯源：回答末尾标注引用了哪些文件和行号
+    - 将 OfferClaw 核心 .md 文件（user_profile / daily_log / SOUL / target_rules / source_policy）作为 RAG 文档源，共 5 文件 50 个分块
+    - 实现文档 ingest 管线（rag_ingest.py）：读取 Markdown → 按标题智能分块 → Embedding 向量化 → 批量存入 ChromaDB
+    - 实现 RAG 检索链路（rag_query.py）：用户自然语言提问 → 向量化 → top_k 语义检索 → 基于检索片段由 LLM 整合回答
+    - 实现完整 RAG Agent（rag_agent.py）：自动检索注入 + 多轮对话历史 + 工具调用循环（search_docs / get_current_time）
+    - 搭建 FastAPI 接口层（rag_api.py）：6 个 API 端点（health / profile / query / search / match / reset），Swagger UI 自动文档
+    - 手写智谱 JWT Bearer Token 签名（纯标准库，无 PyJWT 依赖），用于 Embedding 和 LLM 调用鉴权
   - 产出 / 成果：
-    - `rag_ingest.py`（文档 ingest 脚本）+ `rag_tools.py`（分块/向量化/检索工具）+ `rag_agent.py`（RAG 问答主入口）
-    - 端到端测试覆盖 5 类典型问题（画像查询 / 执行记录 / 岗位匹配结果 / 规划查询 / 无相关片段回退）
-    - 作为 OfferClaw V1.5 核心升级，直接对应蔚来 JD 的"构建基于 RAG 的知识增强问答系统"职责
+    - `rag_ingest.py`（文档入库）+ `rag_query.py`（检索问答）+ `rag_agent.py`（完整 Agent）+ `rag_api.py`（HTTP API）+ `rag_tools.py`（工具函数）
+    - 端到端测试通过：用户提问 → LLM 自动调 search_docs → 检索 → 整合回答，全链路跑通
+    - FastAPI 服务支持 Swagger UI 交互式测试，6 个端点全部可用
+    - 作为 OfferClaw V1.5 核心升级，直接对应蔚来 JD 的"RAG 知识增强问答系统" + "接口开发和上线部署"职责
 
-> 备注（OfferClaw 填写）：§4 项目 2 于 2026-04-21 确立方向（RAG 引入 OfferClaw），2026-04-22 启动编码。Week 1 目标：跑通 ingest + 检索 + 问答全链路。Week 2 目标：FastAPI 接口层 + LangGraph 工作流编排。
+> 备注（OfferClaw 填写）：§4 项目 2 于 2026-04-21 确立方向（RAG 引入 OfferClaw），2026-04-22 启动编码。Week 1 交付：ingest + 检索 + Agent + FastAPI 全链路（超前完成）。Week 2 目标：LangGraph 工作流编排 + RAG 评估（RAGAS）。
 
 ---
 
