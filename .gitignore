@@ -1,3 +1,39 @@
-.DS_Store
-*.pyc
+# OfferClaw · Git 忽略清单
+# 当前目录尚未初始化 Git，但提前写好，未来 git init 后立即生效。
+
+# ===== 敏感凭证：绝对不能入库 =====
+.env
+.env.*
+*.key
+*.pem
+secrets/
+
+# ===== Python 构建产物 =====
 __pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+env/
+
+# ===== IDE / Agent CLI =====
+.vscode/
+.idea/
+.claude/
+*.swp
+
+# ===== 历史参考文档（不由项目维护） =====
+OfferClaw_Claude_直接投喂提示词.md
+OfferClaw_项目与竞赛推进指导报告.docx
+
+# ===== OfferClaw 运行时产物 =====
+memory.json
+plans/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
