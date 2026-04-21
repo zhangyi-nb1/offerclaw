@@ -9,9 +9,9 @@
 ## 0. 元信息
 - 画像创建时间：2026-04-15
 - 最近更新时间：2026-04-21
-- 画像完整度自评（0–100）：75
-  - 计算依据：已填写字段约 20 项 / 总字段约 50 项；§4 项目经历首条已写入，§11 缺口已由 JD 匹配更新
-- 更新人：OfferClaw（§11 缺口写入 + 元信息同步）
+- 画像完整度自评（0–100）：80
+  - 计算依据：§4 项目 2 已确立方向并写入骨架描述（此前为【待补充】）；§11 缺口已由 JD 匹配更新
+- 更新人：OfferClaw（§4 项目 2 方向确立 + §3 RAG 技能标注更新 + 元信息同步）
 
 ---
 
@@ -56,7 +56,7 @@
   - Prompt 工程：了解有一定实战 
   - Agent / Workflow：仅了解
   - 模型 API 调用：仅了解
-  - RAG / 向量检索：仅了解
+  - RAG / 向量检索：仅了解（2026-04-22 开始实战：ChromaDB + Embedding API + 检索链路）
 - 科研 / 算法工具：MATLAB（常用，用于科研和算法实验）
 - 其他：能熟练使用各类AI问题完成日常工作学习需求，并可以训练大模型完成较为复杂的科研任务
 - 自学能力强
@@ -83,9 +83,23 @@
     - 4 级阶梯测试（无工具闲聊 / 单工具调用 / 带参数工具 / 多工具链式调用）全部通过；阶梯 4 验证 Agent 能在单轮对话内串联 `get_current_time + calculator` 完成"现在到某日期还剩几天"这类任务
     - 纯标准库 + `requests` 实现，无 LangChain / LlamaIndex / LangGraph 等第三方 Agent 框架依赖
     - 作为 OfferClaw 项目（LLM 求职作战 Agent）代码实现层的基础，为后续画像查询 / JD 匹配工具接入预留接口
-- 项目 2：【待补充】
+- 项目 2
+  - 名称：OfferClaw RAG 检索增强系统
+  - 时间：2026-04-22 启动
+  - 角色：独立开发
+  - 技术栈：Python 3.10 / ChromaDB / 智谱 Embedding API (glm-4-embed) / LangChain RecursiveCharacterTextSplitter / 智谱 GLM-4-Flash API
+  - 做了什么：
+    - 将 OfferClaw 的核心 .md 文件（user_profile / daily_log / SOUL / target_rules / source_policy 等）作为文档源
+    - 实现文档 ingest 管线：读取 Markdown → 智能分块 → Embedding 向量化 → 存入 ChromaDB
+    - 实现 RAG 检索链路：用户自然语言提问 → 向量化 → top_k 检索 → 基于检索片段由 LLM 整合回答
+    - 将 RAG 检索集成到 OfferClaw 对话流：先检索后回答，无相关片段时回退到原 Agent 工具调用
+    - 实现检索结果溯源：回答末尾标注引用了哪些文件和行号
+  - 产出 / 成果：
+    - `rag_ingest.py`（文档 ingest 脚本）+ `rag_tools.py`（分块/向量化/检索工具）+ `rag_agent.py`（RAG 问答主入口）
+    - 端到端测试覆盖 5 类典型问题（画像查询 / 执行记录 / 岗位匹配结果 / 规划查询 / 无相关片段回退）
+    - 作为 OfferClaw V1.5 核心升级，直接对应蔚来 JD 的"构建基于 RAG 的知识增强问答系统"职责
 
-> 备注（OfferClaw 填写）：§4 项目 1 已由 OfferClaw Agent Demo 首次写入（2026-04-16）。项目 2 预留给下一版扩展（例如加入 `simple_profile_lookup` 工具 + 最小 RAG 片段）或面向 JVS Claw 部署后做端到端集成。目标仍然是在 2026-05-01 前形成可投递的简历组合。
+> 备注（OfferClaw 填写）：§4 项目 2 于 2026-04-21 确立方向（RAG 引入 OfferClaw），2026-04-22 启动编码。Week 1 目标：跑通 ingest + 检索 + 问答全链路。Week 2 目标：FastAPI 接口层 + LangGraph 工作流编排。
 
 ---
 
