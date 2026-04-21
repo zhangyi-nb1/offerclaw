@@ -4,6 +4,7 @@
 # RAG 核心
 chromadb>=0.4.0
 langchain-text-splitters>=0.2.0
+langgraph>=0.2.0
 
 # HTTP API 层
 fastapi>=0.110.0
