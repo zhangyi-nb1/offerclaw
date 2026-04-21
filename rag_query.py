@@ -22,7 +22,6 @@ import chromadb
 from rag_tools import (
     get_embedding,
     chat_with_llm,
-    ZHIPU_API_KEY,
 )
 
 # =====================================================
@@ -53,7 +52,7 @@ def retrieve(query: str, collection, top_k: int = DEFAULT_TOP_K) -> list[dict]:
     返回 list[dict]，包含 document、source、score。
     """
     # 获取查询向量
-    if ZHIPU_API_KEY == "YOUR_API_KEY_HERE":
+    if not os.environ.get("ZHIPU_API_KEY", ""):
         # 伪向量（与 ingest 阶段一致）
         import hashlib, struct
         h = hashlib.sha256(query.encode("utf-8")).digest()
@@ -133,7 +132,7 @@ def main():
         sys.exit(1)
 
     print(f"[DB] 当前记录数: {collection.count()}")
-    print(f"[API] {'已配置' if ZHIPU_API_KEY != 'YOUR_API_KEY_HERE' else '⚠️ 未配置（伪向量模式）'}")
+    print(f"[API] {'已配置' if os.environ.get('ZHIPU_API_KEY', '') else '⚠️ 未配置（伪向量模式）'}")
     print()
 
     if args.query:
@@ -154,7 +153,7 @@ def main():
 
 
 def run_query(query: str, collection, top_k: int, no_llm: bool):
-    print(f"\n🔍 查询: 「{query}」")
+    print(f"\n[QUERY] {query!r}")
     
     docs = retrieve(query, collection, top_k)
     
@@ -175,7 +174,7 @@ def run_query(query: str, collection, top_k: int, no_llm: bool):
 
     print(f"\n  调用 LLM 生成回答...")
     answer = answer_with_llm(query, docs)
-    print(f"\n  💡 回答：\n{answer}")
+    print(f"\n  [ANSWER]\n{answer}")
 
 
 if __name__ == "__main__":

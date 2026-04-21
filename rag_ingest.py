@@ -24,8 +24,6 @@ import chromadb
 from rag_tools import (
     get_embeddings_batch,
     split_markdown_document,
-    ZHIPU_API_KEY,
-    ZHIPU_API_SECRET,
 )
 
 # =====================================================
@@ -95,7 +93,7 @@ def ingest_file(
     print(f"\n  [EMBEDDING] 调用智谱 API（{len(texts)} 条，批量）...")
     t0 = time.time()
 
-    if ZHIPU_API_KEY == "YOUR_API_KEY_HERE":
+    if not os.environ.get("ZHIPU_API_KEY", ""):
         print(f"  [WARN] API Key 未配置，使用 SHA256 伪向量作为占位")
         # 用伪向量占位，验证入库流程
         def _fake_embed(text: str) -> list[float]:
@@ -165,7 +163,7 @@ def main():
     print("OfferClaw RAG Ingest")
     print(f"数据库目录: {DB_DIR}")
     print(f"Collection: {COLLECTION_NAME}")
-    print(f"API Key: {'已配置' if ZHIPU_API_KEY != 'YOUR_API_KEY_HERE' else '⚠️ 未配置（使用伪向量占位）'}")
+    print(f"API Key: {'已配置' if os.environ.get('ZHIPU_API_KEY', '') else '⚠️ 未配置（使用伪向量占位）'}")
     print("=" * 60)
 
     # 初始化 ChromaDB
@@ -202,7 +200,7 @@ def main():
     ok_files = 0
     
     for s in stats:
-        status_icon = "✅" if s["status"] == "ok" else ("⚠️" if s["status"] == "not_found" else "❌")
+        status_icon = "[OK]" if s["status"] == "ok" else ("[MISS]" if s["status"] == "not_found" else "[ERR]")
         print(f"  {status_icon} {s['file']}: {s['chunks']} 块, {s.get('tokens', 0)} 字符")
         if s["status"] == "ok":
             total_chunks += s["chunks"]

@@ -20,17 +20,46 @@ import hmac
 import base64
 import time
 import json
+import os
 import requests
 
+
 # =====================================================
-# 配置区（用户自行填写 API Key / Secret）
+# 密钥加载（复用 agent_demo.py 同款逻辑）
 # =====================================================
 
-ZHIPU_API_KEY = "YOUR_API_KEY_HERE"       # ← 替换为你的智谱 API Key
-ZHIPU_API_SECRET = "YOUR_API_SECRET_HERE"  # ← 替换为你的智谱 API Secret
+def _load_local_env(path: str = ".env.local") -> None:
+    """从同目录 .env.local 读取 KEY=VALUE 并注入 os.environ（已有的不覆盖）。"""
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+_load_local_env()
+
+
+def _get_api_key() -> str:
+    """读取智谱 API Key（格式：<key_id>.<signing_secret>）。"""
+    key = os.environ.get("ZHIPU_API_KEY", "")
+    if not key:
+        raise RuntimeError(
+            "未找到 ZHIPU_API_KEY。\n"
+            "请在 .env.local 里加一行：\n"
+            "  ZHIPU_API_KEY=你的key_id.你的signing_secret"
+        )
+    return key
+
 
 # 模型配置
-EMBEDDING_MODEL = "embedding-3"            # 384 维，性价比高
+EMBEDDING_MODEL = "embedding-3"            # 2048 维（智谱 embedding-3 实际输出）
 LLM_MODEL = "glm-4-flash"                  # 问答用
 EMBEDDING_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/embeddings"
 CHAT_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
@@ -49,35 +78,33 @@ def _base64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
 
 
-def generate_zhipu_token(
-    api_key: str = ZHIPU_API_KEY,
-    api_secret: str = ZHIPU_API_SECRET,
-    exp_seconds: int = 86400,
-) -> str:
+def generate_zhipu_token(exp_seconds: int = 3600) -> str:
     """
     生成智谱 API 的 JWT Bearer Token。
-    纯标准库实现，无 PyJWT 依赖。
-    Token 默认有效期 24 小时。
-    
-    签名结构：
-    Header = {"alg": "HS256", "sign_type": "SIGN"}
-    Payload = {"api_key": xxx, "exp": timestamp, "timestamp": now}
-    Signature = HMAC-SHA256(base64url(header) + "." + base64url(payload), secret)
+    纯标准库实现，无 PyJWT 依赖。与 agent_demo.py 行为完全一致：
+      - 从 ZHIPU_API_KEY 环境变量读取，格式 "<key_id>.<signing_secret>"
+      - exp / timestamp 用毫秒（智谱要求）
     """
+    raw_key = _get_api_key()
+    try:
+        api_key_id, signing_secret = raw_key.split(".", 1)
+    except ValueError:
+        raise ValueError("ZHIPU_API_KEY 格式应为 '<key_id>.<signing_secret>'，请检查 .env.local")
+
     header = {"alg": "HS256", "sign_type": "SIGN"}
-    now = int(time.time())
+    now_ms = int(round(time.time() * 1000))           # 毫秒，与智谱要求一致
     payload = {
-        "api_key": api_key,
-        "exp": now + exp_seconds,
-        "timestamp": now,
+        "api_key": api_key_id,
+        "exp": now_ms + exp_seconds * 1000,
+        "timestamp": now_ms,
     }
 
     header_b64 = _base64url_encode(json.dumps(header, separators=(",", ":")).encode())
     payload_b64 = _base64url_encode(json.dumps(payload, separators=(",", ":")).encode())
-    
+
     signing_input = f"{header_b64}.{payload_b64}"
     signature = hmac.new(
-        api_secret.encode("utf-8"),
+        signing_secret.encode("utf-8"),
         signing_input.encode("utf-8"),
         hashlib.sha256,
     ).digest()
