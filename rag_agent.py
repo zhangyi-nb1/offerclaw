@@ -37,7 +37,6 @@ from rag_tools import (
     get_embeddings_batch,
     chat_with_llm,
     generate_zhipu_token,
-    ZHIPU_API_KEY,
     LLM_MODEL,
 )
 
@@ -228,21 +227,7 @@ class RAGAgent:
 
     def _get_query_embedding(self, query: str) -> list[float]:
         """获取查询的 embedding 向量"""
-        if ZHIPU_API_KEY == "YOUR_API_KEY_HERE":
-            # 伪向量占位
-            import hashlib, struct
-            h = hashlib.sha256(query.encode("utf-8")).digest()
-            extended = b""
-            while len(extended) < 384 * 4:
-                h = hashlib.sha256(h).digest()
-                extended += h
-            floats = struct.unpack("384f", extended[:384 * 4])
-            mn, mx = min(floats), max(floats)
-            if mx == mn:
-                return [0.5] * 384
-            return [(v - mn) / (mx - mn) for v in floats]
-        else:
-            return get_embedding(query)
+        return get_embedding(query)
 
     def _build_system_prompt(self, user_query: str, use_retrieval: bool = True) -> str:
         """构造 System Prompt"""
@@ -408,7 +393,7 @@ def main():
     print("OfferClaw RAG Agent V1")
     print(f"检索: {'启用' if not args.no_retrieval else '禁用'}")
     print(f"Top-K: {args.top_k}")
-    print(f"API Key: {'已配置' if ZHIPU_API_KEY != 'YOUR_API_KEY_HERE' else '⚠️ 未配置'}")
+    print(f"API Key: {'已配置' if os.environ.get('ZHIPU_API_KEY') else '未配置'}")
     print("=" * 60)
     print()
 
@@ -421,9 +406,9 @@ def main():
 
     if args.query:
         # 单次查询
-        print(f"\n💬 用户: {args.query}")
+        print(f"\n[User] {args.query}")
         answer = agent.chat(args.query, use_retrieval=not args.no_retrieval)
-        print(f"\n🤖 OfferClaw: {answer}")
+        print(f"\n[OfferClaw] {answer}")
     else:
         # 交互模式
         print("OfferClaw RAG 交互模式（输入 'quit' 退出，'reset' 清空历史）")
@@ -431,7 +416,7 @@ def main():
 
         while True:
             try:
-                query = input("\n💬 你: ").strip()
+                query = input("\n[你] ").strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n再见！")
                 break
@@ -440,7 +425,7 @@ def main():
                 continue
 
             if query.lower() in ("quit", "exit", "q"):
-                print("👋 再见！")
+                print("再见！")
                 break
 
             if query.lower() == "reset":
@@ -448,7 +433,7 @@ def main():
                 continue
 
             answer = agent.chat(query, use_retrieval=not args.no_retrieval)
-            print(f"\n🤖 OfferClaw: {answer}")
+            print(f"\n[OfferClaw] {answer}")
 
 
 if __name__ == "__main__":
