@@ -20,10 +20,15 @@ __pycache__/
 venv/
 env/
 
-# ===== IDE =====
+# ===== IDE / Agent CLI =====
 .vscode/
 .idea/
+.claude/
 *.swp
+
+# ===== 历史参考文档（不由项目维护） =====
+OfferClaw_Claude_直接投喂提示词.md
+OfferClaw_项目与竞赛推进指导报告.docx
 
 # ===== OfferClaw 运行时产物 =====
 memory.json
