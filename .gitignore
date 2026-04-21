@@ -31,8 +31,9 @@ OfferClaw_Claude_直接投喂提示词.md
 OfferClaw_项目与竞赛推进指导报告.docx
 
 # ===== OfferClaw 运行时产物 =====
-chroma_db/            # 向量数据库（本地目录）
-chroma_db_test/       # 测试数据库
+# 向量数据库（本地目录，不入 git）
+chroma_db/
+chroma_db_test/
 memory.json
 plans/
 
