@@ -1,0 +1,22 @@
+### 开发操作
+
+#### Git 提交流程
+
+```bash
+cd C:\Users\13513\Desktop\XIAGMU
+git pull
+git add -A
+git commit -m "改了什么的简短描述"
+git push
+```
+
+说明：开工前先同步远端最新代码；完成修改后再提交并推送。
+
+#### FastAPI 本地启动
+
+```bash
+cd C:\Users\13513\Desktop\XIAGMU
+python -m uvicorn rag_api:app --host 127.0.0.1 --port 8000 --reload
+```
+
+说明：启动后打开 `http://127.0.0.1:8000/docs`，可以直接在 Swagger UI 中测试接口。
