@@ -37,6 +37,8 @@ chroma_db_test/
 memory.json
 plans/
 
-# ===== OS =====
-.DS_Store
-Thumbs.db
+# ===== 本地私密备忘 =====
+# 命令速查 / 笔记等私人文件，不入 git
+1
+*.local.md
+notes.txt
