@@ -126,11 +126,21 @@
 - 状态：顺利
 - 受阻原因：无
 
-### 学习留痕
 - 笔记：
   - ChromaDB 安装零依赖问题，PersistentClient 本地运行无需外部服务
   - LangChain 分块：RecursiveCharacterTextSplitter 支持自定义 separators，按 Markdown 标题切分效果优于固定大小
   - 分块参数：chunk_size=800, chunk_overlap=80 比默认 500/50 更适合长文档
+  - **RAG 检索增强策略体系（7 种方法）**：
+    - **Multi-query**：同义改写，一个 query 变多个问法 → 提高召回率
+    - **RAG-Fusion**：Multi-query 的增强版，多路检索结果做融合排序 → 全局 rank 更稳
+    - **Sub-question**：把复杂问题拆成多个不同子任务 → 并行处理再聚合
+    - **Least-to-most**：子任务按依赖关系从易到难逐步求解
+    - **IR-CoT**：推理与检索交替进行 → 边想边查，适合动态信息缺口
+    - **Step-back prompting**：问题上提到更抽象层级 → 先拿通用原则再回答具体问题
+    - **HyDE**：先生成假想文档，再用其 embedding 检索真实文档 → 解决 query/document 表达鸿沟
+  - 辨别口诀：换问法→Multi-query / 融结果→RAG-Fusion / 拆任务→Sub-question / 按顺序拆→Least-to-most / 边想边查→IR-CoT / 先抬高一层→Step-back / 先生成假文档→HyDE
+  - 易混点：Multi-query≠Sub-question（前者改写，后者拆分）；Step-back≠Multi-query（前者上提层级，后者换问法）；HyDE≠Multi-query（前者生成假文档，后者换问法）
+  - 共同风险：子问题拆碎→成本高/噪声大；前步出错→后续继承错误；只拆不聚合→结论不收束
 - 链接：
   - https://docs.trychroma.com/ （ChromaDB 官方文档）
   - https://python.langchain.com/docs/how_to/recursive_text_splitter/ （LangChain 分块文档）
