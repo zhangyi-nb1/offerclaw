@@ -187,7 +187,21 @@ async function doDiscover(){
   try{
     const r=await fetch('/api/discover',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({raw,url})});
-    if(!r.ok) throw new Error('HTTP '+r.status+' '+(await r.text()));
+    if(!r.ok){
+      let detail='';
+      try{const j=await r.json();detail=j.detail||'';}catch(e){detail=await r.text();}
+      // SPA 页面：把后端给的操作指引显示出来
+      if(detail.includes('SPA_PAGE:') || detail.includes('JS 动态渲染')){
+        const guide=detail.replace('SPA_PAGE:','').trim();
+        document.getElementById('matchBody').innerHTML=
+          `<div style="background:#fef3c7;padding:12px;border-radius:8px;line-height:1.7">
+           <b>⚠️ 该页为 JS 动态渲染，无法直接抓取</b><br><pre style="margin-top:8px;font-size:12px;white-space:pre-wrap">${escapeHtml(guide)}</pre>
+           </div>`;
+        status.className='status s-warn';status.textContent='需手动复制';
+        return;
+      }
+      throw new Error(detail||'HTTP '+r.status);
+    }
     const d=await r.json();
     document.getElementById('jdInput').value=d.jd_text||raw;
     const summary=`✓ 已抽取：${d.company||'?'} · ${d.title||'?'} · ${d.location||'?'} · ${d.job_type||'?'}\n`+
