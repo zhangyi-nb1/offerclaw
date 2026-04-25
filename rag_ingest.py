@@ -34,23 +34,23 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_DIR = os.path.join(BASE_DIR, "chroma_db")
 COLLECTION_NAME = "offerclaw_docs"
 
-# 默认 ingest 的文件列表（按优先级排序）
+# 默认 ingest 的文件列表（按优先级排序，每条带 source_type 标签）
 DEFAULT_FILES = [
-    "user_profile.md",
-    "daily_log.md",
-    "SOUL.md",
-    "target_rules.md",
-    "source_policy.md",
-    "onboarding_prompt.md",
-    "job_match_prompt.md",
-    "plan_prompt.md",
-    "summary_prompt.md",
-    "DATA_CONTRACT.md",
-    "applications.md",
-    "interview_story_bank.md",
-    # V2 阶段六：扩展投递闭环知识源
-    "docs/resume_pitch.md",
-    "docs/project_one_pager.md",
+    ("user_profile.md", "profile"),
+    ("daily_log.md", "log"),
+    ("SOUL.md", "system"),
+    ("target_rules.md", "system"),
+    ("source_policy.md", "system"),
+    ("onboarding_prompt.md", "system"),
+    ("job_match_prompt.md", "system"),
+    ("plan_prompt.md", "system"),
+    ("summary_prompt.md", "system"),
+    ("DATA_CONTRACT.md", "doc"),
+    ("applications.md", "application"),
+    ("interview_story_bank.md", "story"),
+    ("jd_candidates.md", "jd"),
+    ("docs/resume_pitch.md", "resume"),
+    ("docs/project_one_pager.md", "doc"),
 ]
 
 
@@ -62,6 +62,7 @@ def build_collection_name(file_path: str) -> str:
 def ingest_file(
     file_path: str,
     collection,
+    source_type: str = "doc",
 ) -> dict:
     """
     读取单个 .md 文件，分块 → 向量化 → 入库。
@@ -132,6 +133,7 @@ def ingest_file(
     for chunk in chunks:
         metadatas.append({
             "source": filename,
+            "source_type": source_type,
             "char_len": chunk["metadata"]["char_len"],
             "title": chunk["metadata"].get("title", ""),
         })
@@ -169,6 +171,10 @@ def main():
 
     files = args.files if args.files else DEFAULT_FILES
 
+    # 兼容 --files 列表（无 source_type，全部当 doc）
+    if args.files:
+        files = [(f, "doc") for f in args.files]
+
     print("=" * 60)
     print("OfferClaw RAG Ingest")
     print(f"数据库目录: {DB_DIR}")
@@ -196,8 +202,8 @@ def main():
 
     # 逐个文件 ingest
     stats = []
-    for f in files:
-        result = ingest_file(f, collection)
+    for f, st in files:
+        result = ingest_file(f, collection, source_type=st)
         stats.append(result)
 
     # 汇总
