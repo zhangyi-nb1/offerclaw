@@ -34,7 +34,7 @@
 ## 5. 核心模块
 - **match_job.py** — 规则 + LLM 双通路岗位匹配（硬否决在规则层，软评估在 LLM 层）
 - **rag_graph.py** — LangGraph 工作流：retrieve → rerank → answer，带显式 State
-- **rag_api.py** — 11 个 FastAPI 路由（5 核心业务 + 6 辅助/系统）+ JSON 日志 + request_id 中间件
+- **rag_api.py** — 19 个 FastAPI 路由（13 核心业务 + 6 辅助/系统）+ JSON 日志 + request_id 中间件
 - **tools.py** — 6 个 Agent 工具：profile / rules / log / plan / match / summary
 - **eval_rag.py** — Recall@K + MRR + 桶级指标 + baseline 回归（自建 50 题 3 桶集）
 - **static/index.html** — 零依赖前端控制台
@@ -46,21 +46,23 @@ Python 3.13 · FastAPI · LangGraph · ChromaDB · 智谱 GLM-4 / embedding-3 ·
 | 指标 | 值 |
 |---|---|
 | 测试用例 | **37/37** 通过（+3 e2e skip，需 OFFERCLAW_E2E=1） |
-| RAG 召回（自建 50 题 3 桶集） | Recall@5 = **0.96** / MRR = **0.74** |
-| FastAPI 路由 | **11**（5 核心业务 + 6 辅助/系统） |
-| Persona 回归 | 3 personas × 4 JDs = 12 case |
-| 知识库 | **118 chunks**（12 份 markdown） |
-| 工程自检 | doctor 8 OK · verify_pipeline 6/6 |
+| RAG 召回（自建 50 题 3 桶集） | Recall@5 = **0.96** · cross_doc = **1.00** · MRR = **0.67** |
+| FastAPI 路由 | **19**（13 核心业务 + 6 辅助/系统，含 2 条 SSE 流式） |
+| Persona 回归 | 3 personas × multi-JD，结论差异化，见 `docs/persona_compare_report.md` |
+| 知识库 | **160 chunks**（8 类 source_type 元数据） |
+| 工程自检 | doctor **9 OK** · verify_pipeline 6/6 |
 | 端到端首字延迟 | < 2s（SSE 流式） |
+| Playwright SPA | 支持字节/阿里/腾讯等 SPA 招聘页自动渲染 |
 
 > 全部指标的现场命令输出固化在 [`docs/verification_report.md`](verification_report.md)。
 
 ## 8. Demo 链路（≤2 分钟）
-1. `python -m uvicorn rag_api:app` → 浏览器打开 `http://127.0.0.1:8000`
-2. 点 **系统健康** → 看 `chroma_db: connected, 118 records`
-3. 点 **看用户画像** → 显示 §0 元信息 + 方向 + 技能
+1. `python -m uvicorn rag_api:app` → 浏览器打开 `http://127.0.0.1:8000/ui`
+2. 顶部今日建议横条 → 基于 `career_agent.py` + `applications` / `daily_log` 主动生成
+3. 点 **系统健康** → 看 `chroma_db: connected, 160 records`
 4. 粘 NIO JD → 点 **运行匹配** → 输出三档结论 + 缺口清单
-5. 输入 "OfferClaw 主方向是什么？" → 流式问答（fetch + ReadableStream）
+5. 输入 "OfferClaw 主方向是什么？" → 流式问答（SSE，首字 < 2s）
+6. 点卡片⑥ **针对 JD 生成简历段** → SSE 流式输出定制项目描述
 
 ## 9. 关键技术难点 / 取舍
 - **规则 vs LLM**：硬否决用规则（确定性 + 可测试），软评估给 LLM。— 见 Story 2
@@ -76,7 +78,8 @@ Python 3.13 · FastAPI · LangGraph · ChromaDB · 智谱 GLM-4 / embedding-3 ·
 | 没有 LLM Reranker | 加 BGE-reranker 或 GLM-4 二阶段 rerank |
 | applications.md 是手维护表 | 迁 SQLite + 自动化状态机 |
 | 没有 CI / Docker | GitHub Actions + Dockerfile |
-| 单用户 | 多 user 隔离（profile.md → users/<uid>/） |
+| JD 推荐仍是半自动 | Query Builder + 排序层（见 job_discovery.py 扩展计划） |
+| 简历导出 | 支持 Markdown → PDF / Word |
 | 没有自动投递 | **保持不做**（见 `docs/ethical_use.md`） |
 
 ---
