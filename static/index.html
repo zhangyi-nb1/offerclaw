@@ -92,46 +92,37 @@
     <div class="body" id="gapBody">先在卡片 ② 跑一次"开始匹配"</div>
   </div>
 
-  <!-- 卡片 4：计划生成（占位） -->
+  <!-- 卡片 4：计划生成 -->
   <div class="card">
-    <h3>④ 学习/求职计划</h3>
-    <p class="desc">基于缺口生成 7-day plan（V1.5 仅命令行）</p>
-    <div class="body">
-      <div class="placeholder">
-        当前未接入 Web，请在终端运行：<br>
-        <code>python plan_gen.py</code><br>
-        生成的计划会写入 <code>plans/YYYY-MM-DD.md</code>。<br>
-        V2 会把它接到本卡片直出。
-      </div>
+    <h3>④ 学习/求职计划 <span id="planStatus" class="status s-warn">未生成</span></h3>
+    <p class="desc">基于 ③ 缺口清单调 LLM 生成 4 周路线（POST /api/plan）</p>
+    <div class="actions" style="margin-bottom:8px">
+      <button onclick="doPlan()">基于③缺口生成计划</button>
+      <button class="secondary" onclick="doPlan(true)">通用方向规划</button>
     </div>
+    <div class="body" id="planBody">点击上方按钮，约 15-30 秒</div>
   </div>
 
-  <!-- 卡片 5：每日执行 / 复盘（占位） -->
+  <!-- 卡片 5：每日执行 / 复盘 -->
   <div class="card">
-    <h3>⑤ 每日执行 & 周复盘</h3>
-    <p class="desc">写 daily_log.md，周日跑 summary 周报</p>
-    <div class="body">
-      <div class="placeholder">
-        当前未接入 Web，请在终端运行：<br>
-        <code>python summary_tool.py --weekly</code><br>
-        每日记录请直接在 <code>daily_log.md</code> 加条目。<br>
-        V2 会把"今日建议"主动推到本卡片。
-      </div>
+    <h3>⑤ 每日执行 & 周复盘 <span id="dailyStatus" class="status s-warn">未加载</span></h3>
+    <p class="desc">读写 daily_log.md（GET/POST /api/daily）</p>
+    <textarea id="dailyInput" placeholder="今天做了什么？例如：完成 RAG eval Recall@5 跑到 0.96"></textarea>
+    <div class="actions">
+      <button onclick="appendDaily()">追加到今日</button>
+      <button class="secondary" onclick="loadDaily()">刷新近 7 天</button>
     </div>
+    <div class="body" id="dailyBody" style="margin-top:10px">点击"刷新近 7 天"</div>
   </div>
 
-  <!-- 卡片 6：简历草稿（占位） -->
+  <!-- 卡片 6：简历草稿 -->
   <div class="card">
-    <h3>⑥ 简历草稿</h3>
-    <p class="desc">从画像 + 故事库 + 投递记录生成简历段</p>
-    <div class="body">
-      <div class="placeholder">
-        当前 V1.5 简历素材请直接看：<br>
-        · <a href="https://github.com/zhangyi-nb1/offerclaw/blob/main/docs/resume_pitch.md" target="_blank">docs/resume_pitch.md</a><br>
-        · <a href="https://github.com/zhangyi-nb1/offerclaw/blob/main/interview_story_bank.md" target="_blank">interview_story_bank.md</a><br>
-        V2 会新增 <code>resume_builder.py</code> 自动生成 JD 定制版项目段。
-      </div>
+    <h3>⑥ 简历草稿 <span id="resumeStatus" class="status s-warn">未加载</span></h3>
+    <p class="desc">聚合 resume_pitch + 故事库标题（GET /api/resume）</p>
+    <div class="actions" style="margin-bottom:8px">
+      <button onclick="loadResume()">加载简历素材</button>
     </div>
+    <div class="body" id="resumeBody">点击上方按钮加载</div>
   </div>
 
 </div>
@@ -151,6 +142,8 @@ const SAMPLE_JD = `岗位名称：大模型应用开发实习生
 专业要求：计算机、人工智能、通信、电子等相关专业
 技术要求：熟悉 Python；了解 LLM / Prompt / Agent；有 RAG / LangGraph / FastAPI 项目经验优先
 工作性质：驻场`;
+
+let LAST_GAPS_TEXT = "";  // 给 ④ 计划生成用
 
 async function loadProfile(){
   const body=document.getElementById('profBody');
@@ -188,23 +181,108 @@ async function doMatch(){
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     const cls=d.status==='适合'?'s-ok':(d.status==='中长期可转向'?'s-warn':'s-err');
-    body.innerHTML=`<p><b>结论：</b><span class="status ${cls}">${d.status}</span></p>
+    body.innerHTML=`<p><b>结论：</b><span class="status ${cls}">${d.status}</span>
+                    <span style="color:#666;font-size:12px;margin-left:6px">方向：${d.direction||'—'}</span></p>
                     <pre style="margin-top:10px">${escapeHtml(d.summary)}</pre>`;
     st.className='status '+cls;st.textContent=d.status;
-    // 抽缺口
-    const gaps=extractGaps(d.summary);
-    if(gaps){gapBody.innerHTML=`<pre>${escapeHtml(gaps)}</pre>`;
-      gst.className='status s-ok';gst.textContent='已抽取';}
-    else{gapBody.innerHTML='<div style="color:#888">本次匹配未识别到缺口段（可能完全适合或为否决型）</div>';
-      gst.className='status s-warn';gst.textContent='无';}
+    // 结构化缺口直出
+    renderGaps(d.gap_list||{}, d.suggestions||[]);
   }catch(e){body.innerHTML=`<div style="color:#c5221f">匹配失败：${e.message}</div>`;
     st.className='status s-err';st.textContent='失败';}
 }
 
-function extractGaps(text){
-  if(!text)return null;
-  const m=text.match(/(?:核心缺口|缺口|gap)[:：\s\S]*?(?=\n\n|\n##|\n\*\*[^缺gap]|$)/i);
-  return m?m[0].trim():null;
+function renderGaps(gapList, suggestions){
+  const gapBody=document.getElementById('gapBody');
+  const gst=document.getElementById('gapStatus');
+  let html='';let total=0;let plain='';
+  for(const [cat,items] of Object.entries(gapList)){
+    if(!items||!items.length)continue;
+    html+=`<p style="margin-top:6px"><b>${cat}（${items.length}）</b></p><ul style="margin-left:18px">`;
+    plain+=`【${cat}】\n`;
+    for(const it of items){html+=`<li>${escapeHtml(it)}</li>`;plain+=`- ${it}\n`;total++;}
+    html+='</ul>';
+  }
+  if(suggestions&&suggestions.length){
+    html+=`<p style="margin-top:10px;color:#1a73e8"><b>📌 建议</b></p><ul style="margin-left:18px">`;
+    plain+='\n【建议】\n';
+    for(const s of suggestions){html+=`<li>${escapeHtml(s)}</li>`;plain+=`- ${s}\n`;}
+    html+='</ul>';
+  }
+  if(total===0){gapBody.innerHTML='<div style="color:#137333">✓ 本次匹配未识别到硬缺口</div>';
+    gst.className='status s-ok';gst.textContent='无硬缺口';LAST_GAPS_TEXT='';
+  }else{gapBody.innerHTML=html;
+    gst.className='status s-ok';gst.textContent=`已抽取 ${total}`;
+    LAST_GAPS_TEXT=plain.trim();}
+}
+
+async function doPlan(useGeneric){
+  const body=document.getElementById('planBody');
+  const st=document.getElementById('planStatus');
+  const gaps=useGeneric?'':LAST_GAPS_TEXT;
+  if(!useGeneric && !gaps){
+    if(!confirm('③ 缺口卡还没数据，要不要按"通用方向"生成？')) return;
+  }
+  body.innerHTML='规划生成中（约 15-30 秒，调 LLM）...';
+  st.className='status s-warn';st.textContent='运行中';
+  try{
+    const r=await fetch('/api/plan',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({gaps:gaps})});
+    if(!r.ok){const t=await r.text();throw new Error('HTTP '+r.status+' '+t);}
+    const d=await r.json();
+    body.innerHTML=`<p style="color:#888;font-size:12px">已写入：${escapeHtml(d.saved_path||'—')}</p>
+                    <pre style="margin-top:8px">${escapeHtml(d.plan_md||'')}</pre>`;
+    st.className='status s-ok';st.textContent='已生成';
+  }catch(e){body.innerHTML=`<div style="color:#c5221f">规划失败：${e.message}</div>`;
+    st.className='status s-err';st.textContent='失败';}
+}
+
+async function loadDaily(){
+  const body=document.getElementById('dailyBody');
+  const st=document.getElementById('dailyStatus');
+  body.innerHTML='加载中...';st.className='status s-warn';st.textContent='加载中';
+  try{
+    const r=await fetch('/api/daily');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    const today=d.today_log?`<p><b>📅 今日</b></p><pre>${escapeHtml(d.today_log)}</pre>`
+                           :'<p style="color:#888">今日还没有记录，在上方输入框追加一条</p>';
+    const recent=d.recent_summary?`<p style="margin-top:10px"><b>📊 近 ${d.recent_days} 天</b></p><pre>${escapeHtml(d.recent_summary)}</pre>`:'';
+    body.innerHTML=today+recent;
+    st.className='status s-ok';st.textContent='已加载';
+  }catch(e){body.innerHTML=`<div style="color:#c5221f">读取失败：${e.message}</div>`;
+    st.className='status s-err';st.textContent='失败';}
+}
+
+async function appendDaily(){
+  const inp=document.getElementById('dailyInput');
+  const text=inp.value.trim();
+  if(!text){alert('请输入今日记录');return;}
+  const st=document.getElementById('dailyStatus');
+  st.className='status s-warn';st.textContent='写入中';
+  try{
+    const r=await fetch('/api/daily',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})});
+    if(!r.ok){const t=await r.text();throw new Error('HTTP '+r.status+' '+t);}
+    inp.value='';
+    await loadDaily();
+  }catch(e){alert('写入失败：'+e.message);st.className='status s-err';st.textContent='失败';}
+}
+
+async function loadResume(){
+  const body=document.getElementById('resumeBody');
+  const st=document.getElementById('resumeStatus');
+  body.innerHTML='加载中...';st.className='status s-warn';st.textContent='加载中';
+  try{
+    const r=await fetch('/api/resume');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    body.innerHTML=`<p><b>📄 resume_pitch.md</b></p>
+                    <pre style="max-height:200px;overflow:auto">${escapeHtml(d.pitch||'')}</pre>
+                    <p style="margin-top:10px"><b>🎤 故事库标题</b></p>
+                    <pre>${escapeHtml(d.stories_preview||'')}</pre>`;
+    st.className='status s-ok';st.textContent='已加载';
+  }catch(e){body.innerHTML=`<div style="color:#c5221f">读取失败：${e.message}</div>`;
+    st.className='status s-err';st.textContent='失败';}
 }
 
 async function ask(){
@@ -224,8 +302,9 @@ async function ask(){
 function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
-// 自动加载画像
+// 自动加载画像 + 近 7 天
 loadProfile();
+loadDaily();
 </script>
 </body>
 </html>

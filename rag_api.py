@@ -83,6 +83,33 @@ class MatchRequest(BaseModel):
 class MatchResponse(BaseModel):
     status: str
     summary: str
+    direction: str = ""
+    gap_list: dict = {}
+    suggestions: list = []
+
+
+class PlanRequest(BaseModel):
+    gaps: str = ""
+
+
+class PlanResponse(BaseModel):
+    plan_md: str
+    saved_path: str = ""
+
+
+class DailyResponse(BaseModel):
+    today_log: str = ""
+    recent_summary: str = ""
+    recent_days: int = 7
+
+
+class DailyAppendRequest(BaseModel):
+    text: str
+
+
+class ResumeResponse(BaseModel):
+    pitch: str = ""
+    stories_preview: str = ""
 
 
 class ProfileResponse(BaseModel):
@@ -153,7 +180,11 @@ async def info():
             "POST /api/query": "RAG 问答（一次性）",
             "POST /api/stream": "RAG 问答（SSE 流式）",
             "POST /api/search": "仅检索",
-            "POST /api/match": "岗位匹配（三档结论）",
+            "POST /api/match": "岗位匹配（三档结论 + 结构化缺口）",
+            "POST /api/plan": "基于缺口生成 4 周路线规划",
+            "GET /api/daily": "今日 daily_log + 最近 7 天摘要",
+            "POST /api/daily": "向 daily_log.md 追加今日条目",
+            "GET /api/resume": "简历素材聚合（pitch + 故事预览）",
             "POST /api/reset": "清空对话历史",
         },
     }
@@ -263,6 +294,7 @@ async def rag_search(req: QueryRequest):
 async def job_match(req: MatchRequest):
     """
     岗位匹配接口：调用 match_job.run_match 真实跑出三档结论。
+    返回结构化 gap_list + suggestions，方便前端独立渲染缺口卡。
     """
     try:
         from match_job import run_match, format_report, DEMO_PROFILE
@@ -270,10 +302,112 @@ async def job_match(req: MatchRequest):
         return MatchResponse(
             status=report.conclusion,
             summary=format_report(report),
+            direction=report.direction,
+            gap_list=report.gap_list or {},
+            suggestions=report.suggestions or [],
         )
     except Exception as e:
         _log.exception("match failed")
         raise HTTPException(status_code=500, detail=f"匹配失败: {str(e)}")
+
+
+@app.post("/api/plan", response_model=PlanResponse)
+async def gen_plan(req: PlanRequest):
+    """基于缺口清单生成 4 周路线规划。无缺口时用 DATA_CONTRACT.md 风格的兜底输入。"""
+    try:
+        from plan_gen import (
+            read_text, build_messages, call_llm_plain, save_plan,
+            PROFILE_PATH, PLAN_PROMPT_PATH, DAILY_LOG_PATH,
+            SOURCE_POLICY_PATH, TARGET_RULES_PATH,
+        )
+        api_key = os.getenv("ZHIPU_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置")
+        gaps = (req.gaps or "").strip() or "（前端未提供缺口清单，按用户画像通用方向规划）"
+        messages = build_messages(
+            profile=read_text(PROFILE_PATH),
+            plan_prompt=read_text(PLAN_PROMPT_PATH),
+            daily_log=read_text(DAILY_LOG_PATH),
+            source_policy=read_text(SOURCE_POLICY_PATH),
+            target_rules=read_text(TARGET_RULES_PATH),
+            gaps=gaps,
+        )
+        plan_md = call_llm_plain(messages, api_key, max_tokens=3500)
+        path = save_plan(plan_md)
+        return PlanResponse(plan_md=plan_md, saved_path=path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log.exception("plan failed")
+        raise HTTPException(status_code=500, detail=f"规划失败: {str(e)}")
+
+
+@app.get("/api/daily", response_model=DailyResponse)
+async def get_daily():
+    """读 daily_log.md：返回今日块 + 最近 7 天聚合。"""
+    try:
+        from summary_tool import read_text, extract_date_block, extract_recent_blocks, DAILY_LOG_PATH
+        log = read_text(DAILY_LOG_PATH)
+        today = datetime.date.today().isoformat()
+        return DailyResponse(
+            today_log=extract_date_block(log, today),
+            recent_summary=extract_recent_blocks(log, days=7),
+            recent_days=7,
+        )
+    except Exception as e:
+        _log.exception("daily get failed")
+        raise HTTPException(status_code=500, detail=f"读取失败: {str(e)}")
+
+
+@app.post("/api/daily", response_model=DailyResponse)
+async def append_daily(req: DailyAppendRequest):
+    """向 daily_log.md 追加今日条目（如果今日块不存在则新建标题）。"""
+    try:
+        from summary_tool import read_text, extract_date_block, extract_recent_blocks, DAILY_LOG_PATH
+        text = (req.text or "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="text 不能为空")
+        today = datetime.date.today().isoformat()
+        log_path = DAILY_LOG_PATH
+        existing = read_text(log_path) if os.path.exists(log_path) else ""
+        block = extract_date_block(existing, today)
+        ts = datetime.datetime.now().strftime("%H:%M")
+        if block:
+            new_log = existing.rstrip() + f"\n- {ts} {text}\n"
+        else:
+            sep = "\n\n" if existing else ""
+            new_log = existing + f"{sep}## {today}\n- {ts} {text}\n"
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(new_log)
+        return DailyResponse(
+            today_log=extract_date_block(new_log, today),
+            recent_summary=extract_recent_blocks(new_log, days=7),
+            recent_days=7,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log.exception("daily append failed")
+        raise HTTPException(status_code=500, detail=f"追加失败: {str(e)}")
+
+
+@app.get("/api/resume", response_model=ResumeResponse)
+async def get_resume():
+    """聚合简历素材：docs/resume_pitch.md 全文 + interview_story_bank.md 标题列表。"""
+    try:
+        pitch_path = os.path.join(BASE_DIR, "docs", "resume_pitch.md")
+        story_path = os.path.join(BASE_DIR, "interview_story_bank.md")
+        pitch = open(pitch_path, encoding="utf-8").read() if os.path.exists(pitch_path) else "（缺 docs/resume_pitch.md）"
+        stories_preview = ""
+        if os.path.exists(story_path):
+            import re as _re
+            content = open(story_path, encoding="utf-8").read()
+            titles = _re.findall(r"^## (Story.*)$", content, _re.MULTILINE)
+            stories_preview = "\n".join(f"- {t}" for t in titles) or "（未识别到 Story 标题）"
+        return ResumeResponse(pitch=pitch, stories_preview=stories_preview)
+    except Exception as e:
+        _log.exception("resume failed")
+        raise HTTPException(status_code=500, detail=f"读取失败: {str(e)}")
 
 
 @app.post("/api/stream")
