@@ -1,186 +1,231 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OfferClaw · 控制台</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OfferClaw · 求职作战控制台</title>
 <style>
-  :root{
-    --bg:#0f1115; --card:#1a1d24; --muted:#8b93a7; --fg:#e8ecf3;
-    --accent:#6aa3ff; --ok:#34d399; --warn:#fbbf24; --err:#f87171; --line:#2a2f3a;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
-    font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-  header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
-  header h1{margin:0;font-size:18px;letter-spacing:.5px}
-  header .pill{font-size:12px;padding:3px 10px;border-radius:999px;background:#222837;color:var(--muted)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px;padding:16px 24px 32px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-  .card h2{margin:0 0 8px;font-size:15px;display:flex;align-items:center;gap:8px}
-  .card h2 .tag{font-size:11px;padding:2px 8px;border-radius:6px;background:#222837;color:var(--muted);font-weight:400}
-  .card .desc{color:var(--muted);font-size:12.5px;margin-bottom:12px}
-  textarea,input{width:100%;background:#0f1218;color:var(--fg);border:1px solid var(--line);
-    border-radius:8px;padding:9px 10px;font:13px/1.5 inherit;outline:none;resize:vertical}
-  textarea:focus,input:focus{border-color:var(--accent)}
-  label{display:block;color:var(--muted);font-size:12px;margin:6px 0 4px}
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
-  button{background:var(--accent);color:#0a0d14;border:0;border-radius:8px;padding:8px 14px;
-    font-weight:600;cursor:pointer;font-size:13px}
-  button.secondary{background:#2a2f3a;color:var(--fg)}
-  button:disabled{opacity:.5;cursor:not-allowed}
-  pre{background:#0a0d14;border:1px solid var(--line);border-radius:8px;padding:10px;
-    margin-top:10px;max-height:340px;overflow:auto;font:12.5px/1.5 ui-monospace,Consolas,Menlo,monospace;
-    white-space:pre-wrap;word-break:break-word}
-  .status{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
-  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
-  .dot.ok{background:var(--ok)} .dot.err{background:var(--err)} .dot.warn{background:var(--warn)}
-  .stream-out{min-height:80px}
-  .stream-meta{font-size:11px;color:var(--muted);margin-top:6px}
-  a{color:var(--accent)}
-  footer{padding:14px 24px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);text-align:center}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+       background:#f6f7fb;color:#222;line-height:1.55;padding:24px}
+  header{max-width:1280px;margin:0 auto 20px}
+  h1{font-size:24px;color:#1a73e8;display:flex;align-items:center;gap:10px}
+  h1 .badge{font-size:12px;background:#1a73e8;color:#fff;padding:2px 8px;border-radius:10px;font-weight:400}
+  header .sub{color:#666;font-size:14px;margin-top:6px}
+  .toolbar{max-width:1280px;margin:0 auto 16px;background:#fff;border-radius:10px;padding:14px 18px;
+           box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .toolbar input{flex:1;min-width:280px;padding:8px 12px;border:1px solid #d6d8e0;border-radius:6px;font-size:14px}
+  .toolbar button{padding:8px 18px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px}
+  .toolbar button:hover{background:#1557b0}
+  .toolbar .ans{flex-basis:100%;background:#f0f4fa;border-left:3px solid #1a73e8;padding:10px 14px;
+                font-size:13px;color:#333;max-height:160px;overflow:auto;white-space:pre-wrap;display:none}
+  .grid{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:980px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  .card{background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;flex-direction:column;min-height:280px}
+  .card h3{font-size:15px;color:#1a73e8;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+  .card .desc{font-size:12px;color:#888;margin-bottom:12px}
+  .card .body{flex:1;font-size:13px;color:#333;overflow:auto;max-height:340px}
+  .card .body pre{white-space:pre-wrap;word-break:break-word;font-family:inherit}
+  .card textarea{width:100%;min-height:80px;padding:8px;border:1px solid #d6d8e0;border-radius:6px;
+                 font-family:inherit;font-size:13px;resize:vertical;margin-bottom:8px}
+  .card .actions{display:flex;gap:8px;margin-top:10px}
+  .card button{padding:6px 14px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+  .card button:hover{background:#1557b0}
+  .card button.secondary{background:#eef0f5;color:#333}
+  .card button.secondary:hover{background:#dee2eb}
+  .card .placeholder{background:#fff7e6;border:1px dashed #f0c46d;color:#8a6510;padding:10px 12px;
+                     border-radius:6px;font-size:12px;line-height:1.7}
+  .tag{display:inline-block;background:#e8f0fe;color:#1a73e8;padding:2px 8px;border-radius:10px;
+       font-size:11px;margin:2px 4px 2px 0}
+  .status{font-size:11px;padding:2px 8px;border-radius:10px;margin-left:6px}
+  .s-ok{background:#e6f4ea;color:#137333}
+  .s-warn{background:#fff7e6;color:#8a6510}
+  .s-err{background:#fce8e6;color:#c5221f}
+  footer{max-width:1280px;margin:24px auto 0;text-align:center;font-size:12px;color:#888}
+  footer a{color:#1a73e8;text-decoration:none;margin:0 8px}
 </style>
 </head>
 <body>
+
 <header>
-  <h1>🦅 OfferClaw 控制台 <span class="pill">v1.1.0</span></h1>
-  <span class="status"><span id="dot" class="dot"></span><span id="hstxt">正在检查后端…</span></span>
+  <h1>🦅 OfferClaw <span class="badge">V1.5 求职作战控制台</span></h1>
+  <p class="sub">本地长期运行的求职作战 AI Agent · 画像 → 匹配 → 规划 → 执行 → 复盘</p>
 </header>
+
+<!-- 顶部 RAG 问答工具条 -->
+<div class="toolbar">
+  <input id="askInput" placeholder="问 OfferClaw 任何关于项目 / 简历 / 投递的问题（走 RAG）" />
+  <button onclick="ask()">提问</button>
+  <button class="secondary" onclick="document.getElementById('askAns').style.display='none'">收起</button>
+  <div id="askAns" class="ans"></div>
+</div>
 
 <div class="grid">
 
+  <!-- 卡片 1：用户画像 -->
   <div class="card">
-    <h2>① 系统健康 <span class="tag">GET /health</span></h2>
-    <div class="desc">检查后端、向量库、知识库条数。</div>
-    <div class="row">
-      <button onclick="checkHealth()">立即检测</button>
-      <button class="secondary" onclick="getProfile()">看用户画像</button>
+    <h3>① 用户画像 <span id="profStatus" class="status s-warn">加载中</span></h3>
+    <p class="desc">来源：user_profile.md（GET /api/profile）</p>
+    <div class="body" id="profBody">点击下方按钮加载</div>
+    <div class="actions">
+      <button onclick="loadProfile()">刷新画像</button>
     </div>
-    <pre id="health-out">点击上方按钮…</pre>
   </div>
 
+  <!-- 卡片 2：JD 分析 -->
   <div class="card">
-    <h2>② 岗位匹配 <span class="tag">POST /api/match</span></h2>
-    <div class="desc">把 JD 文本贴进来，输出"适合 / 暂不 / 中长期可转向"三档结论。</div>
-    <label>JD 文本</label>
-    <textarea id="jd" rows="6">AI 应用开发实习生
-上海
-本科及以上
-熟悉 Python / LLM / Prompt / Agent
-驻场实习</textarea>
-    <div class="row">
-      <button onclick="runMatch()">运行匹配</button>
-      <span id="match-status" class="status"></span>
+    <h3>② JD 分析与匹配 <span id="matchStatus" class="status s-warn">未运行</span></h3>
+    <p class="desc">规则 + LLM 双通路（POST /api/match）</p>
+    <textarea id="jdInput" placeholder="粘贴一份 JD 全文或岗位描述..."></textarea>
+    <div class="actions">
+      <button onclick="doMatch()">开始匹配</button>
+      <button class="secondary" onclick="loadSampleJD()">填入示例 JD</button>
     </div>
-    <pre id="match-out"></pre>
+    <div class="body" id="matchBody" style="margin-top:10px"></div>
   </div>
 
-  <div class="card" style="grid-column:1/-1">
-    <h2>③ 与 OfferClaw 对话（流式） <span class="tag">POST /api/stream (SSE)</span></h2>
-    <div class="desc">基于 RAG 知识库回答，token 实时推送。试问："OfferClaw 主方向是什么？" / "证据等级如何分？"</div>
-    <label>你的问题</label>
-    <input id="q" type="text" value="OfferClaw 主方向是什么？" />
-    <div class="row">
-      <label style="margin:0">检索条数</label>
-      <input id="topk" type="number" value="5" min="1" max="10" style="width:80px"/>
-      <label style="margin:0"><input type="checkbox" id="useret" checked> 启用 RAG</label>
-      <button onclick="runStream()" id="askbtn">发送</button>
-      <button class="secondary" onclick="resetChat()">清空对话历史</button>
-      <button class="secondary" onclick="document.getElementById('stream-out').textContent=''">清屏</button>
-      <span id="stream-status" class="status"></span>
+  <!-- 卡片 3：缺口清单 -->
+  <div class="card">
+    <h3>③ 缺口清单 <span id="gapStatus" class="status s-warn">等待匹配</span></h3>
+    <p class="desc">从 ② 的匹配结果中自动抽取核心缺口段</p>
+    <div class="body" id="gapBody">先在卡片 ② 跑一次"开始匹配"</div>
+  </div>
+
+  <!-- 卡片 4：计划生成（占位） -->
+  <div class="card">
+    <h3>④ 学习/求职计划</h3>
+    <p class="desc">基于缺口生成 7-day plan（V1.5 仅命令行）</p>
+    <div class="body">
+      <div class="placeholder">
+        当前未接入 Web，请在终端运行：<br>
+        <code>python plan_gen.py</code><br>
+        生成的计划会写入 <code>plans/YYYY-MM-DD.md</code>。<br>
+        V2 会把它接到本卡片直出。
+      </div>
     </div>
-    <pre id="stream-out" class="stream-out"></pre>
-    <div id="stream-meta" class="stream-meta"></div>
+  </div>
+
+  <!-- 卡片 5：每日执行 / 复盘（占位） -->
+  <div class="card">
+    <h3>⑤ 每日执行 & 周复盘</h3>
+    <p class="desc">写 daily_log.md，周日跑 summary 周报</p>
+    <div class="body">
+      <div class="placeholder">
+        当前未接入 Web，请在终端运行：<br>
+        <code>python summary_tool.py --weekly</code><br>
+        每日记录请直接在 <code>daily_log.md</code> 加条目。<br>
+        V2 会把"今日建议"主动推到本卡片。
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片 6：简历草稿（占位） -->
+  <div class="card">
+    <h3>⑥ 简历草稿</h3>
+    <p class="desc">从画像 + 故事库 + 投递记录生成简历段</p>
+    <div class="body">
+      <div class="placeholder">
+        当前 V1.5 简历素材请直接看：<br>
+        · <a href="https://github.com/zhangyi-nb1/offerclaw/blob/main/docs/resume_pitch.md" target="_blank">docs/resume_pitch.md</a><br>
+        · <a href="https://github.com/zhangyi-nb1/offerclaw/blob/main/interview_story_bank.md" target="_blank">interview_story_bank.md</a><br>
+        V2 会新增 <code>resume_builder.py</code> 自动生成 JD 定制版项目段。
+      </div>
+    </div>
   </div>
 
 </div>
 
 <footer>
-  开发者视图：<a href="/docs" target="_blank">Swagger /docs</a> ·
-  GitHub：<a href="https://github.com/zhangyi-nb1/offerclaw" target="_blank">zhangyi-nb1/offerclaw</a>
+  <a href="/docs" target="_blank">Swagger /docs</a> ·
+  <a href="/health" target="_blank">/health</a> ·
+  <a href="/api/info" target="_blank">/api/info</a> ·
+  <a href="https://github.com/zhangyi-nb1/offerclaw" target="_blank">GitHub</a>
 </footer>
 
 <script>
-const $ = id => document.getElementById(id);
-const setStatus = (el, txt, cls) => { el.innerHTML = '<span class="dot '+(cls||'')+'"></span>'+txt; };
+const SAMPLE_JD = `岗位名称：大模型应用开发实习生
+公司：示例公司
+工作地点：上海
+学历要求：本科及以上
+专业要求：计算机、人工智能、通信、电子等相关专业
+技术要求：熟悉 Python；了解 LLM / Prompt / Agent；有 RAG / LangGraph / FastAPI 项目经验优先
+工作性质：驻场`;
 
-async function checkHealth(){
-  $('health-out').textContent = '检测中…';
+async function loadProfile(){
+  const body=document.getElementById('profBody');
+  const st=document.getElementById('profStatus');
+  body.innerHTML='加载中...';st.className='status s-warn';st.textContent='加载中';
   try{
-    const r = await fetch('/health'); const j = await r.json();
-    $('health-out').textContent = JSON.stringify(j, null, 2);
-    const ok = j.status === 'healthy';
-    setStatus($('dot').parentElement, ok ? ('后端正常 · '+j.collection_records+' 条知识') : '后端降级', ok?'ok':'warn');
-  }catch(e){ $('health-out').textContent = '后端连不上：'+e; setStatus($('dot').parentElement,'后端离线','err'); }
+    const r=await fetch('/api/profile');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    const dirs=(d.direction||[]).map(x=>`<span class="tag">${x}</span>`).join('');
+    body.innerHTML=`
+      <p><b>姓名：</b>${d.name||'—'}</p>
+      <p style="margin-top:8px"><b>方向：</b><br>${dirs||'—'}</p>
+      <p style="margin-top:8px"><b>技能摘要：</b><br>${d.skills_summary||'—'}</p>
+      <p style="margin-top:8px;color:#888;font-size:12px">更新于：${d.updated_at||'—'}</p>`;
+    st.className='status s-ok';st.textContent='已加载';
+  }catch(e){body.innerHTML=`<div style="color:#c5221f">加载失败：${e.message}</div>`;
+    st.className='status s-err';st.textContent='失败';}
 }
 
-async function getProfile(){
-  $('health-out').textContent = '加载用户画像…';
+function loadSampleJD(){document.getElementById('jdInput').value=SAMPLE_JD;}
+
+async function doMatch(){
+  const jd=document.getElementById('jdInput').value.trim();
+  const body=document.getElementById('matchBody');
+  const gapBody=document.getElementById('gapBody');
+  const st=document.getElementById('matchStatus');
+  const gst=document.getElementById('gapStatus');
+  if(!jd){alert('请先粘贴 JD');return;}
+  body.innerHTML='匹配中（约 5-15 秒）...';st.className='status s-warn';st.textContent='运行中';
+  gapBody.innerHTML='匹配中...';gst.className='status s-warn';gst.textContent='等待';
   try{
-    const r = await fetch('/api/profile'); const j = await r.json();
-    $('health-out').textContent = JSON.stringify(j, null, 2);
-  }catch(e){ $('health-out').textContent = '失败：'+e; }
+    const r=await fetch('/api/match',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({jd_text:jd})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    const cls=d.status==='适合'?'s-ok':(d.status==='中长期可转向'?'s-warn':'s-err');
+    body.innerHTML=`<p><b>结论：</b><span class="status ${cls}">${d.status}</span></p>
+                    <pre style="margin-top:10px">${escapeHtml(d.summary)}</pre>`;
+    st.className='status '+cls;st.textContent=d.status;
+    // 抽缺口
+    const gaps=extractGaps(d.summary);
+    if(gaps){gapBody.innerHTML=`<pre>${escapeHtml(gaps)}</pre>`;
+      gst.className='status s-ok';gst.textContent='已抽取';}
+    else{gapBody.innerHTML='<div style="color:#888">本次匹配未识别到缺口段（可能完全适合或为否决型）</div>';
+      gst.className='status s-warn';gst.textContent='无';}
+  }catch(e){body.innerHTML=`<div style="color:#c5221f">匹配失败：${e.message}</div>`;
+    st.className='status s-err';st.textContent='失败';}
 }
 
-async function runMatch(){
-  const jd = $('jd').value.trim();
-  if(!jd){ alert('请填 JD'); return; }
-  setStatus($('match-status'),'匹配中…','warn');
-  $('match-out').textContent = '';
+function extractGaps(text){
+  if(!text)return null;
+  const m=text.match(/(?:核心缺口|缺口|gap)[:：\s\S]*?(?=\n\n|\n##|\n\*\*[^缺gap]|$)/i);
+  return m?m[0].trim():null;
+}
+
+async function ask(){
+  const q=document.getElementById('askInput').value.trim();
+  const ans=document.getElementById('askAns');
+  if(!q){alert('请输入问题');return;}
+  ans.style.display='block';ans.textContent='思考中...';
   try{
-    const r = await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({jd_text: jd})});
-    const j = await r.json();
-    const cls = j.status && j.status.indexOf('适合')>=0 ? 'ok' : (j.status && j.status.indexOf('暂不')>=0 ? 'err' : 'warn');
-    setStatus($('match-status'), '完成：'+(j.status||'-'), cls);
-    $('match-out').textContent = j.summary || JSON.stringify(j, null, 2);
-  }catch(e){ setStatus($('match-status'),'失败','err'); $('match-out').textContent = e; }
+    const r=await fetch('/api/query',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,top_k:3})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    ans.textContent=d.answer||JSON.stringify(d,null,2);
+  }catch(e){ans.textContent='查询失败：'+e.message;}
 }
 
-async function resetChat(){
-  try{ await fetch('/api/reset',{method:'POST'}); setStatus($('stream-status'),'已清空对话历史','ok'); }
-  catch(e){ setStatus($('stream-status'),'失败','err'); }
-}
+function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
-async function runStream(){
-  const q = $('q').value.trim(); if(!q){ alert('请输入问题'); return; }
-  const out = $('stream-out'); out.textContent = '';
-  $('stream-meta').textContent = '';
-  setStatus($('stream-status'),'连接中…','warn');
-  $('askbtn').disabled = true;
-  try{
-    const resp = await fetch('/api/stream',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({query:q, top_k:Number($('topk').value)||5, use_retrieval:$('useret').checked})});
-    if(!resp.ok || !resp.body){ throw new Error('HTTP '+resp.status); }
-    setStatus($('stream-status'),'接收中…','ok');
-    const reader = resp.body.getReader(); const dec = new TextDecoder();
-    let buf='';
-    while(true){
-      const {value,done} = await reader.read(); if(done) break;
-      buf += dec.decode(value, {stream:true});
-      let idx;
-      while((idx = buf.indexOf('\n\n')) !== -1){
-        const block = buf.slice(0,idx); buf = buf.slice(idx+2);
-        let ev='message', data='';
-        for(const line of block.split('\n')){
-          if(line.startsWith('event: ')) ev = line.slice(7).trim();
-          else if(line.startsWith('data: ')) data += line.slice(6);
-        }
-        if(!data) continue;
-        try{
-          const j = JSON.parse(data);
-          if(ev==='meta'){ $('stream-meta').textContent = 'request_id='+j.request_id+' · 检索 '+j.retrieval_count+' 条'; }
-          else if(ev==='error'){ out.textContent += '\n[错误] '+j.error; }
-          else if(j.delta){ out.textContent += j.delta; out.scrollTop = out.scrollHeight; }
-        }catch{}
-        if(ev==='done'){ setStatus($('stream-status'),'完成','ok'); }
-      }
-    }
-  }catch(e){ setStatus($('stream-status'),'失败：'+e,'err'); }
-  finally{ $('askbtn').disabled = false; }
-}
-
-checkHealth();
+// 自动加载画像
+loadProfile();
 </script>
 </body>
 </html>

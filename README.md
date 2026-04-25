@@ -5,6 +5,8 @@
 
 📚 快速链接：[一页纸](docs/project_one_pager.md) · [验证报告](docs/verification_report.md) · [架构图](docs/architecture.md) · [演示流程](docs/demo.md) · [简历介绍](docs/resume_pitch.md) · [面试问答卡](docs/interview_qa.md) · [故事库](interview_story_bank.md) · [技术复盘](docs/postmortem.md) · [伦理边界](docs/ethical_use.md) · [数据契约](DATA_CONTRACT.md) · [投递追踪](applications.md)
 
+🖥️ **本地求职作战控制台**：启动 FastAPI 后访问 [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui) — 6 卡片布局（① 画像 / ② JD 匹配 / ③ 缺口 / ④ 计划 / ⑤ 每日执行 / ⑥ 简历草稿）+ 顶部 RAG 问答条。
+
 🔢 当前指标：**RAG Recall@5 = 0.96 · MRR = 0.74 · pytest 37/37 (+3 e2e skip) · 11 FastAPI 接口（含 SSE 流式 + 友好 UI）· 118 chunks 知识库 · doctor 8 OK · verify_pipeline 6/6**
 
 > ℹ️ 评估集为**自建小规模 RAG 评估集**：50 题 · 3 桶（fact / explain / cross_doc）· 已开源在 [`tests/rag_eval_set.json`](tests/rag_eval_set.json)，基线快照见 [`tests/rag_eval_baseline.json`](tests/rag_eval_baseline.json)。此规模仅用于单人项目自检与回归对比，不代表通用基准。
