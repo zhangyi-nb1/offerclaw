@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OfferClaw · 控制台</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#1a1d24; --muted:#8b93a7; --fg:#e8ecf3;
+    --accent:#6aa3ff; --ok:#34d399; --warn:#fbbf24; --err:#f87171; --line:#2a2f3a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  header h1{margin:0;font-size:18px;letter-spacing:.5px}
+  header .pill{font-size:12px;padding:3px 10px;border-radius:999px;background:#222837;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px;padding:16px 24px 32px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h2{margin:0 0 8px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .card h2 .tag{font-size:11px;padding:2px 8px;border-radius:6px;background:#222837;color:var(--muted);font-weight:400}
+  .card .desc{color:var(--muted);font-size:12.5px;margin-bottom:12px}
+  textarea,input{width:100%;background:#0f1218;color:var(--fg);border:1px solid var(--line);
+    border-radius:8px;padding:9px 10px;font:13px/1.5 inherit;outline:none;resize:vertical}
+  textarea:focus,input:focus{border-color:var(--accent)}
+  label{display:block;color:var(--muted);font-size:12px;margin:6px 0 4px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  button{background:var(--accent);color:#0a0d14;border:0;border-radius:8px;padding:8px 14px;
+    font-weight:600;cursor:pointer;font-size:13px}
+  button.secondary{background:#2a2f3a;color:var(--fg)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  pre{background:#0a0d14;border:1px solid var(--line);border-radius:8px;padding:10px;
+    margin-top:10px;max-height:340px;overflow:auto;font:12.5px/1.5 ui-monospace,Consolas,Menlo,monospace;
+    white-space:pre-wrap;word-break:break-word}
+  .status{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .dot.ok{background:var(--ok)} .dot.err{background:var(--err)} .dot.warn{background:var(--warn)}
+  .stream-out{min-height:80px}
+  .stream-meta{font-size:11px;color:var(--muted);margin-top:6px}
+  a{color:var(--accent)}
+  footer{padding:14px 24px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>🦅 OfferClaw 控制台 <span class="pill">v1.1.0</span></h1>
+  <span class="status"><span id="dot" class="dot"></span><span id="hstxt">正在检查后端…</span></span>
+</header>
+
+<div class="grid">
+
+  <div class="card">
+    <h2>① 系统健康 <span class="tag">GET /health</span></h2>
+    <div class="desc">检查后端、向量库、知识库条数。</div>
+    <div class="row">
+      <button onclick="checkHealth()">立即检测</button>
+      <button class="secondary" onclick="getProfile()">看用户画像</button>
+    </div>
+    <pre id="health-out">点击上方按钮…</pre>
+  </div>
+
+  <div class="card">
+    <h2>② 岗位匹配 <span class="tag">POST /api/match</span></h2>
+    <div class="desc">把 JD 文本贴进来，输出"适合 / 暂不 / 中长期可转向"三档结论。</div>
+    <label>JD 文本</label>
+    <textarea id="jd" rows="6">AI 应用开发实习生
+上海
+本科及以上
+熟悉 Python / LLM / Prompt / Agent
+驻场实习</textarea>
+    <div class="row">
+      <button onclick="runMatch()">运行匹配</button>
+      <span id="match-status" class="status"></span>
+    </div>
+    <pre id="match-out"></pre>
+  </div>
+
+  <div class="card" style="grid-column:1/-1">
+    <h2>③ 与 OfferClaw 对话（流式） <span class="tag">POST /api/stream (SSE)</span></h2>
+    <div class="desc">基于 RAG 知识库回答，token 实时推送。试问："OfferClaw 主方向是什么？" / "证据等级如何分？"</div>
+    <label>你的问题</label>
+    <input id="q" type="text" value="OfferClaw 主方向是什么？" />
+    <div class="row">
+      <label style="margin:0">检索条数</label>
+      <input id="topk" type="number" value="5" min="1" max="10" style="width:80px"/>
+      <label style="margin:0"><input type="checkbox" id="useret" checked> 启用 RAG</label>
+      <button onclick="runStream()" id="askbtn">发送</button>
+      <button class="secondary" onclick="resetChat()">清空对话历史</button>
+      <button class="secondary" onclick="document.getElementById('stream-out').textContent=''">清屏</button>
+      <span id="stream-status" class="status"></span>
+    </div>
+    <pre id="stream-out" class="stream-out"></pre>
+    <div id="stream-meta" class="stream-meta"></div>
+  </div>
+
+</div>
+
+<footer>
+  开发者视图：<a href="/docs" target="_blank">Swagger /docs</a> ·
+  GitHub：<a href="https://github.com/zhangyi-nb1/offerclaw" target="_blank">zhangyi-nb1/offerclaw</a>
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const setStatus = (el, txt, cls) => { el.innerHTML = '<span class="dot '+(cls||'')+'"></span>'+txt; };
+
+async function checkHealth(){
+  $('health-out').textContent = '检测中…';
+  try{
+    const r = await fetch('/health'); const j = await r.json();
+    $('health-out').textContent = JSON.stringify(j, null, 2);
+    const ok = j.status === 'healthy';
+    setStatus($('dot').parentElement, ok ? ('后端正常 · '+j.collection_records+' 条知识') : '后端降级', ok?'ok':'warn');
+  }catch(e){ $('health-out').textContent = '后端连不上：'+e; setStatus($('dot').parentElement,'后端离线','err'); }
+}
+
+async function getProfile(){
+  $('health-out').textContent = '加载用户画像…';
+  try{
+    const r = await fetch('/api/profile'); const j = await r.json();
+    $('health-out').textContent = JSON.stringify(j, null, 2);
+  }catch(e){ $('health-out').textContent = '失败：'+e; }
+}
+
+async function runMatch(){
+  const jd = $('jd').value.trim();
+  if(!jd){ alert('请填 JD'); return; }
+  setStatus($('match-status'),'匹配中…','warn');
+  $('match-out').textContent = '';
+  try{
+    const r = await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({jd_text: jd})});
+    const j = await r.json();
+    const cls = j.status && j.status.indexOf('适合')>=0 ? 'ok' : (j.status && j.status.indexOf('暂不')>=0 ? 'err' : 'warn');
+    setStatus($('match-status'), '完成：'+(j.status||'-'), cls);
+    $('match-out').textContent = j.summary || JSON.stringify(j, null, 2);
+  }catch(e){ setStatus($('match-status'),'失败','err'); $('match-out').textContent = e; }
+}
+
+async function resetChat(){
+  try{ await fetch('/api/reset',{method:'POST'}); setStatus($('stream-status'),'已清空对话历史','ok'); }
+  catch(e){ setStatus($('stream-status'),'失败','err'); }
+}
+
+async function runStream(){
+  const q = $('q').value.trim(); if(!q){ alert('请输入问题'); return; }
+  const out = $('stream-out'); out.textContent = '';
+  $('stream-meta').textContent = '';
+  setStatus($('stream-status'),'连接中…','warn');
+  $('askbtn').disabled = true;
+  try{
+    const resp = await fetch('/api/stream',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query:q, top_k:Number($('topk').value)||5, use_retrieval:$('useret').checked})});
+    if(!resp.ok || !resp.body){ throw new Error('HTTP '+resp.status); }
+    setStatus($('stream-status'),'接收中…','ok');
+    const reader = resp.body.getReader(); const dec = new TextDecoder();
+    let buf='';
+    while(true){
+      const {value,done} = await reader.read(); if(done) break;
+      buf += dec.decode(value, {stream:true});
+      let idx;
+      while((idx = buf.indexOf('\n\n')) !== -1){
+        const block = buf.slice(0,idx); buf = buf.slice(idx+2);
+        let ev='message', data='';
+        for(const line of block.split('\n')){
+          if(line.startsWith('event: ')) ev = line.slice(7).trim();
+          else if(line.startsWith('data: ')) data += line.slice(6);
+        }
+        if(!data) continue;
+        try{
+          const j = JSON.parse(data);
+          if(ev==='meta'){ $('stream-meta').textContent = 'request_id='+j.request_id+' · 检索 '+j.retrieval_count+' 条'; }
+          else if(ev==='error'){ out.textContent += '\n[错误] '+j.error; }
+          else if(j.delta){ out.textContent += j.delta; out.scrollTop = out.scrollHeight; }
+        }catch{}
+        if(ev==='done'){ setStatus($('stream-status'),'完成','ok'); }
+      }
+    }
+  }catch(e){ setStatus($('stream-status'),'失败：'+e,'err'); }
+  finally{ $('askbtn').disabled = false; }
+}
+
+checkHealth();
+</script>
+</body>
+</html>

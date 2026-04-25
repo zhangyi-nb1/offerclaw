@@ -16,7 +16,7 @@ OfferClaw · FastAPI 服务层
 """
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Optional
 import json
@@ -98,17 +98,32 @@ class ProfileResponse(BaseModel):
 
 @app.get("/")
 async def root():
-    """根路径：API 信息"""
+    """根路径：重定向到友好 UI。"""
+    return RedirectResponse(url="/ui")
+
+
+@app.get("/ui")
+async def ui():
+    """OfferClaw 控制台（零依赖单页应用）。"""
+    return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
+
+
+@app.get("/api/info")
+async def info():
+    """API 元信息（原 / 的内容）。"""
     return {
         "name": "OfferClaw API",
-        "version": "1.0.0",
-        "description": "求职作战 Agent HTTP API",
+        "version": "1.1.0",
         "endpoints": {
+            "GET /": "→ 重定向 /ui",
+            "GET /ui": "友好控制台（推荐）",
+            "GET /docs": "Swagger UI",
             "GET /health": "健康检查",
-            "GET /api/profile": "获取用户画像摘要",
-            "POST /api/query": "RAG 问答",
-            "POST /api/search": "仅检索（不调 LLM）",
-            "POST /api/match": "岗位匹配（占位）",
+            "GET /api/profile": "用户画像摘要",
+            "POST /api/query": "RAG 问答（一次性）",
+            "POST /api/stream": "RAG 问答（SSE 流式）",
+            "POST /api/search": "仅检索",
+            "POST /api/match": "岗位匹配（三档结论）",
             "POST /api/reset": "清空对话历史",
         },
     }
