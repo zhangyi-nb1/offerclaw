@@ -3,9 +3,11 @@
 > 一个**长期运行、带状态、围绕单个求职者成长的执行型 AI Agent**。
 > 核心闭环：**画像 → 匹配 → 规划 → 执行 → 复盘 → 回到画像更新**。
 
-📚 快速链接：[架构图](docs/architecture.md) · [演示流程](docs/demo.md) · [简历介绍](docs/resume_pitch.md) · [面试问答卡](docs/interview_qa.md)
+📚 快速链接：[一页纸](docs/project_one_pager.md) · [架构图](docs/architecture.md) · [演示流程](docs/demo.md) · [简历介绍](docs/resume_pitch.md) · [面试问答卡](docs/interview_qa.md) · [故事库](interview_story_bank.md) · [技术复盘](docs/postmortem.md) · [伦理边界](docs/ethical_use.md) · [数据契约](DATA_CONTRACT.md) · [投递追踪](applications.md)
 
-🔢 当前指标：**RAG Recall@5 = 0.75 · MRR = 0.69 · pytest 17/18 · 6 FastAPI 接口（含 SSE 流式）· 50 chunks 知识库**
+🔢 当前指标：**RAG Recall@5 = 0.75 · MRR = 0.69 · pytest 18/18 · 11 FastAPI 接口（含 SSE 流式 + 友好 UI）· 50 chunks 知识库 · doctor 8 OK · verify_pipeline 6/6**
+
+🛠️ 一键体检：`python doctor.py` · 一键链路：`python verify_pipeline.py` · 一键启动：`python -m uvicorn rag_api:app` 然后浏览器打开 http://127.0.0.1:8000
 
 OfferClaw 不是岗位推荐机器人，也不是简历生成工具。它把求职过程当成一个 *持续运行的工程项目*：用 Prompt 契约定义每一步的输入输出，用规则代码兜底关键判断，用 JVS Claw 的定时任务承载长期执行，用 daily_log 沉淀真实数据并反向修正画像与计划。
 

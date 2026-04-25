@@ -92,6 +92,36 @@ class ProfileResponse(BaseModel):
     updated_at: str
 
 
+def _parse_profile(content: str) -> tuple[str, list[str], str, str]:
+    """从 user_profile.md 解析关键字段；缺字段时降级为占位值，不再硬编码。"""
+    import re
+    name = "未填写"
+    updated_at = "未知"
+    direction: list[str] = []
+    skills_summary = "未提取"
+
+    m = re.search(r"姓名[^：:]*[：:]\s*([^\n]+)", content)
+    if m:
+        name = m.group(1).strip().strip("【】 ")
+    m = re.search(r"最近更新时间[：:]\s*([0-9\-/]+)", content)
+    if m:
+        updated_at = m.group(1).strip()
+
+    block = re.search(r"目标方向[^\n]*\n((?:\s*\d+\.[^\n]+\n?)+)", content)
+    if block:
+        direction = [
+            re.sub(r"^\s*\d+\.\s*", "", ln).strip()
+            for ln in block.group(1).splitlines() if ln.strip()
+        ]
+
+    sk = re.search(r"##\s*3\.[^\n]*技能[\s\S]{0,800}", content)
+    if sk:
+        bullets = re.findall(r"-\s*([^\n]+)", sk.group(0))
+        if bullets:
+            skills_summary = "; ".join(b.strip() for b in bullets[:6])
+    return name, direction, skills_summary, updated_at
+
+
 # =====================================================
 # API 路由
 # =====================================================
@@ -163,18 +193,12 @@ async def get_profile():
     with open(profile_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 简单解析（后续可用更精细的解析）
-    name = "Zhang Yi"
-    direction = ["Agent 应用工程", "AI 应用开发", "Prompt / Workflow 工程"]
-
-    # 提取技能摘要
-    skills_summary = "Python(2/5), MATLAB(熟练), Prompt(2/5), Agent(1/5), RAG(1/5→实战中)"
-
+    name, direction, skills_summary, updated_at = _parse_profile(content)
     return ProfileResponse(
         name=name,
         direction=direction,
         skills_summary=skills_summary,
-        updated_at="2026-04-21",
+        updated_at=updated_at,
     )
 
 
