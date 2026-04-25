@@ -5,7 +5,7 @@
 
 📚 快速链接：[一页纸](docs/project_one_pager.md) · [架构图](docs/architecture.md) · [演示流程](docs/demo.md) · [简历介绍](docs/resume_pitch.md) · [面试问答卡](docs/interview_qa.md) · [故事库](interview_story_bank.md) · [技术复盘](docs/postmortem.md) · [伦理边界](docs/ethical_use.md) · [数据契约](DATA_CONTRACT.md) · [投递追踪](applications.md)
 
-🔢 当前指标：**RAG Recall@5 = 0.96 (50题黄金集 · 3桶) · MRR = 0.74 · pytest 18/18 · 11 FastAPI 接口（含 SSE 流式 + 友好 UI）· 118 chunks 知识库 · doctor 8 OK · verify_pipeline 6/6**
+🔢 当前指标：**RAG Recall@5 = 0.96 (50题黄金集 · 3桶) · MRR = 0.74 · pytest 37/37 (+3 e2e skip) · 11 FastAPI 接口（含 SSE 流式 + 友好 UI）· 118 chunks 知识库 · doctor 8 OK · verify_pipeline 6/6**
 
 🛠️ 一键体检：`python doctor.py` · 一键链路：`python verify_pipeline.py` · 一键启动：`python -m uvicorn rag_api:app` 然后浏览器打开 http://127.0.0.1:8000
 
