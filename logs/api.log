@@ -1,7 +1,0 @@
-{"ts": "2026-04-25T13:38:37", "level": "INFO", "logger": "offerclaw.api", "request_id": "92d20eeb68d3", "msg": "REQ GET /health"}
-{"ts": "2026-04-25T13:38:37", "level": "INFO", "logger": "offerclaw.api", "request_id": "92d20eeb68d3", "msg": "RES GET /health 200 651.4ms"}
-{"ts": "2026-04-25T13:38:37", "level": "INFO", "logger": "offerclaw.api", "request_id": "8730b5af0ca1", "msg": "REQ POST /api/match"}
-{"ts": "2026-04-25T13:38:37", "level": "INFO", "logger": "offerclaw.api", "request_id": "8730b5af0ca1", "msg": "RES POST /api/match 200 2.3ms"}
-{"ts": "2026-04-25T13:38:37", "level": "INFO", "logger": "offerclaw.api", "request_id": "77f877440535", "msg": "REQ POST /api/stream"}
-{"ts": "2026-04-25T13:38:37", "level": "INFO", "logger": "offerclaw.api", "request_id": "77f877440535", "msg": "stream start q='OfferClaw 主方向是什么'"}
-{"ts": "2026-04-25T13:38:38", "level": "INFO", "logger": "offerclaw.api", "request_id": "77f877440535", "msg": "RES POST /api/stream 200 511.4ms"}

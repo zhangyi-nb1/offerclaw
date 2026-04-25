@@ -36,6 +36,8 @@ chroma_db/
 chroma_db_test/
 memory.json
 plans/
+summaries/
+logs/
 
 # ===== 本地私密备忘 =====
 # 命令速查 / 笔记等私人文件，不入 git
