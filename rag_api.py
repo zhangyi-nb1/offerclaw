@@ -474,10 +474,15 @@ async def get_today():
 
 @app.post("/api/discover", response_model=DiscoverResponse)
 async def discover(req: DiscoverRequest):
-    """V2 阶段四：JD 半自动抽取。raw 文本或 URL 都可，返回结构化 JD。"""
+    """V2 阶段四：JD 半自动抽取。raw 文本或 URL 都可，返回结构化 JD。
+    URL 模式：先 requests 快速抓，若 SPA 则自动启动 Playwright 无头浏览器渲染。
+    """
+    import asyncio
     try:
         from job_discovery import discover as _disc
-        out = _disc(raw=req.raw, url=req.url)
+        loop = asyncio.get_event_loop()
+        # Playwright 是同步阻塞调用，放线程池避免卡事件循环
+        out = await loop.run_in_executor(None, lambda: _disc(raw=req.raw, url=req.url))
         return DiscoverResponse(**out)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

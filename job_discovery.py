@@ -76,46 +76,79 @@ def extract_jd(raw: str) -> Dict[str, object]:
     }
 
 
-def fetch_url(url: str, timeout: int = 15) -> str:
-    """从 URL 抓正文（对 JS 渲染 SPA 给出明确降级提示）。"""
-    import requests
-    r = requests.get(url, timeout=timeout, headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124",
-        "Accept-Language": "zh-CN,zh;q=0.9",
-    })
-    r.raise_for_status()
-    html = r.text
-
-    # 尝试解析：meta description / og:description
+def _strip_html(html: str) -> str:
+    """去掉 script/style/标签，保留可读正文。"""
     import re as _re
-    meta = (_re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\'](.*?)["\']', html, _re.I)
-            or _re.search(r'<meta[^>]+content=["\'](.*?)["\'][^>]+name=["\']description["\']', html, _re.I))
-    og = (_re.search(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\'](.*?)["\']', html, _re.I))
-    og_title = (_re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\'](.*?)["\']', html, _re.I))
-
-    # 去 script/style，保留正文
     clean = _re.sub(r"<script.*?</script>", "", html, flags=_re.S | _re.I)
     clean = _re.sub(r"<style.*?</style>", "", clean, flags=_re.S | _re.I)
     clean = _re.sub(r"<[^>]+>", "\n", clean)
+    clean = _re.sub(r"[ \t]+", " ", clean)
     clean = _re.sub(r"\n{3,}", "\n\n", clean).strip()
-
-    # SPA 检测：有效正文不足 200 字符 → 该页是 JS 渲染
-    if len(clean) < 200:
-        og_title_text = og_title.group(1).strip() if og_title else ""
-        # 只有 og:title 指向具体职位时才做部分回退（否则 meta desc 是公司通用描述，无用）
-        if og_title_text and len(og_title_text) > 5:
-            desc = (og.group(1).strip() if og else "") or ""
-            return f"（自动抓取到部分信息，可能不完整）\n\n岗位标题：{og_title_text}\n摘要：{desc}\n\n注意：该页为 JS 渲染，完整 JD 请手动复制后粘贴。"
-        raise ValueError(
-            "SPA_PAGE: 该招聘页面由 JavaScript 动态渲染（如字节/阿里/腾讯等大厂招聘网站），"
-            "简单 HTTP 请求无法获取职位详情。\n\n"
-            "解决方法（30 秒）：\n"
-            "1. 在浏览器打开该链接\n"
-            "2. 等页面完全加载后，按 Ctrl+A 全选页面文字\n"
-            "3. Ctrl+C 复制\n"
-            "4. 粘贴到左边的 JD 文本框，再点 [ 开始匹配 ]"
-        )
     return clean
+
+
+def _fetch_with_playwright(url: str, timeout_ms: int = 30000) -> str:
+    """用 Playwright 无头 Chromium 渲染页面，返回可读正文。"""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        ctx = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            locale="zh-CN",
+        )
+        page = ctx.new_page()
+        # networkidle：等网络静止 500ms（确保动态内容加载完毕）
+        page.goto(url, wait_until="networkidle", timeout=timeout_ms)
+        # 部分招聘站点会跳转登录页，尝试等待岗位正文容器出现
+        for selector in ["[class*='job']", "[class*='position']", "[class*='jd']",
+                         "main", "article", "#content", ".detail"]:
+            try:
+                page.wait_for_selector(selector, timeout=3000)
+                break
+            except Exception:
+                continue
+        text = page.inner_text("body")
+        browser.close()
+    return text.strip()
+
+
+def fetch_url(url: str, timeout: int = 20) -> str:
+    """从 URL 抓取 JD 正文。
+    策略：
+    1. 先用轻量 requests 快速抓取（静态页直接返回）
+    2. 若正文 < 300 字（典型 SPA）→ 自动启动 Playwright 无头浏览器渲染
+    3. Playwright 也失败 → 抛出清晰错误
+    """
+    import requests
+    import re as _re
+
+    try:
+        r = requests.get(url, timeout=timeout, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+        })
+        r.raise_for_status()
+        clean = _strip_html(r.text)
+    except Exception as req_err:
+        clean = ""  # requests 失败也走 playwright
+
+    # 静态页内容充足，直接返回
+    if len(clean) >= 300:
+        return clean
+
+    # SPA / 动态页：启动无头浏览器
+    try:
+        text = _fetch_with_playwright(url, timeout_ms=timeout * 1500)
+        if len(text) < 50:
+            raise ValueError("页面内容为空，可能需要登录或地区限制")
+        return text
+    except Exception as pw_err:
+        raise ValueError(
+            f"无法自动抓取该页面内容（可能需要登录、验证码或地区限制）。\n"
+            f"错误详情：{pw_err}\n\n"
+            "建议：在浏览器手动打开页面，全选复制 JD 文字后粘贴到左侧文本框。"
+        )
 
 
 def discover(raw: str = "", url: str = "") -> Dict[str, object]:

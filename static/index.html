@@ -183,23 +183,16 @@ async function doDiscover(){
   const raw=document.getElementById('jdInput').value.trim();
   if(!url && !raw){alert('请填写 URL 或先粘贴 JD 原文');return;}
   const status=document.getElementById('matchStatus');
-  status.className='status s-warn';status.textContent='抽取中...';
+  const body=document.getElementById('matchBody');
+  status.className='status s-warn';
+  status.textContent= url ? '浏览器渲染中（约10-30秒）...' : '抽取中...';
+  body.innerHTML= url ? '⏳ 正在启动无头浏览器渲染页面，请稍候...' : '抽取中...';
   try{
     const r=await fetch('/api/discover',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({raw,url})});
     if(!r.ok){
       let detail='';
       try{const j=await r.json();detail=j.detail||'';}catch(e){detail=await r.text();}
-      // SPA 页面：把后端给的操作指引显示出来
-      if(detail.includes('SPA_PAGE:') || detail.includes('JS 动态渲染')){
-        const guide=detail.replace('SPA_PAGE:','').trim();
-        document.getElementById('matchBody').innerHTML=
-          `<div style="background:#fef3c7;padding:12px;border-radius:8px;line-height:1.7">
-           <b>⚠️ 该页为 JS 动态渲染，无法直接抓取</b><br><pre style="margin-top:8px;font-size:12px;white-space:pre-wrap">${escapeHtml(guide)}</pre>
-           </div>`;
-        status.className='status s-warn';status.textContent='需手动复制';
-        return;
-      }
       throw new Error(detail||'HTTP '+r.status);
     }
     const d=await r.json();
@@ -207,10 +200,10 @@ async function doDiscover(){
     const summary=`✓ 已抽取：${d.company||'?'} · ${d.title||'?'} · ${d.location||'?'} · ${d.job_type||'?'}\n`+
       `命中技能：${(d.skills_detected||[]).join(', ')||'（未命中）'}\n`+
       `原文 ${d.raw_chars} 字 · 现在可点"开始匹配"`;
-    document.getElementById('matchBody').textContent=summary;
+    body.textContent=summary;
     status.className='status s-ok';status.textContent='已抽取';
   }catch(e){status.className='status s-err';status.textContent='抽取失败';
-    document.getElementById('matchBody').textContent='抽取失败：'+e.message;}
+    body.textContent='抽取失败：'+e.message;}
 }
 
 async function doMatch(){
