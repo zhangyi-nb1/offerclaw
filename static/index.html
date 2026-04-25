@@ -53,6 +53,14 @@
   <p class="sub">本地长期运行的求职作战 AI Agent · 画像 → 匹配 → 规划 → 执行 → 复盘</p>
 </header>
 
+<!-- V2 阶段三：今日建议横条 -->
+<div id="todayBar" style="max-width:1280px;margin:0 auto 12px;padding:12px 16px;border-radius:10px;background:linear-gradient(90deg,#0f172a,#1e293b);color:#fff;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+  <span style="font-size:14px;background:#f59e0b;padding:3px 10px;border-radius:6px;font-weight:600">今日建议</span>
+  <span id="todayHeadline" style="font-size:15px;font-weight:600">加载中…</span>
+  <span id="todayMeta" style="font-size:12px;opacity:.75;margin-left:auto"></span>
+  <button class="secondary" style="background:#334155;border:none;color:#fff" onclick="loadToday()">刷新</button>
+</div>
+
 <!-- 顶部 RAG 问答工具条 -->
 <div class="toolbar">
   <input id="askInput" placeholder="问 OfferClaw 任何关于项目 / 简历 / 投递的问题（走 RAG）" />
@@ -78,9 +86,11 @@
     <h3>② JD 分析与匹配 <span id="matchStatus" class="status s-warn">未运行</span></h3>
     <p class="desc">规则 + LLM 双通路（POST /api/match）</p>
     <textarea id="jdInput" placeholder="粘贴一份 JD 全文或岗位描述..."></textarea>
-    <div class="actions">
+    <div class="actions" style="flex-wrap:wrap">
       <button onclick="doMatch()">开始匹配</button>
       <button class="secondary" onclick="loadSampleJD()">填入示例 JD</button>
+      <input id="jdUrl" placeholder="或贴 JD 网页 URL" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"/>
+      <button class="secondary" onclick="doDiscover()">从 URL 抽取</button>
     </div>
     <div class="body" id="matchBody" style="margin-top:10px"></div>
   </div>
@@ -119,8 +129,9 @@
   <div class="card">
     <h3>⑥ 简历草稿 <span id="resumeStatus" class="status s-warn">未加载</span></h3>
     <p class="desc">聚合 resume_pitch + 故事库标题（GET /api/resume）</p>
-    <div class="actions" style="margin-bottom:8px">
+    <div class="actions" style="margin-bottom:8px;flex-wrap:wrap">
       <button onclick="loadResume()">加载简历素材</button>
+      <button class="secondary" onclick="buildResumeForJD()">针对②JD 生成项目段</button>
     </div>
     <div class="body" id="resumeBody">点击上方按钮加载</div>
   </div>
@@ -165,6 +176,28 @@ async function loadProfile(){
 }
 
 function loadSampleJD(){document.getElementById('jdInput').value=SAMPLE_JD;}
+
+// V2 阶段四：URL/原文 → 结构化 JD → 自动塞回 textarea
+async function doDiscover(){
+  const url=document.getElementById('jdUrl').value.trim();
+  const raw=document.getElementById('jdInput').value.trim();
+  if(!url && !raw){alert('请填写 URL 或先粘贴 JD 原文');return;}
+  const status=document.getElementById('matchStatus');
+  status.className='status s-warn';status.textContent='抽取中...';
+  try{
+    const r=await fetch('/api/discover',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({raw,url})});
+    if(!r.ok) throw new Error('HTTP '+r.status+' '+(await r.text()));
+    const d=await r.json();
+    document.getElementById('jdInput').value=d.jd_text||raw;
+    const summary=`✓ 已抽取：${d.company||'?'} · ${d.title||'?'} · ${d.location||'?'} · ${d.job_type||'?'}\n`+
+      `命中技能：${(d.skills_detected||[]).join(', ')||'（未命中）'}\n`+
+      `原文 ${d.raw_chars} 字 · 现在可点"开始匹配"`;
+    document.getElementById('matchBody').textContent=summary;
+    status.className='status s-ok';status.textContent='已抽取';
+  }catch(e){status.className='status s-err';status.textContent='抽取失败';
+    document.getElementById('matchBody').textContent='抽取失败：'+e.message;}
+}
 
 async function doMatch(){
   const jd=document.getElementById('jdInput').value.trim();
@@ -285,6 +318,26 @@ async function loadResume(){
     st.className='status s-err';st.textContent='失败';}
 }
 
+// V2 阶段五：针对 ②JD 调 LLM 生成定制项目段
+async function buildResumeForJD(){
+  const jd=document.getElementById('jdInput').value.trim();
+  if(!jd){alert('请先在 ② 卡片粘 JD 或点"从 URL 抽取"');return;}
+  const body=document.getElementById('resumeBody');
+  const st=document.getElementById('resumeStatus');
+  st.className='status s-warn';st.textContent='LLM 生成中（15-30 秒）';
+  body.innerHTML='⏳ 正在调智谱 LLM 针对此 JD 重排项目段，请稍候...';
+  try{
+    const r=await fetch('/api/resume/build',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({jd_text:jd})});
+    if(!r.ok) throw new Error('HTTP '+r.status+' '+(await r.text()));
+    const d=await r.json();
+    body.innerHTML=`<p><b>🎯 JD 定制项目段（LLM 生成）</b> · JD 字符数 ${d.jd_summary_chars}</p>
+                    <pre style="max-height:420px;overflow:auto;white-space:pre-wrap">${escapeHtml(d.resume_md||'')}</pre>`;
+    st.className='status s-ok';st.textContent='已生成';
+  }catch(e){body.innerHTML=`<div style="color:#c5221f">生成失败：${e.message}</div>`;
+    st.className='status s-err';st.textContent='失败';}
+}
+
 async function ask(){
   const q=document.getElementById('askInput').value.trim();
   const ans=document.getElementById('askAns');
@@ -302,9 +355,29 @@ async function ask(){
 function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
-// 自动加载画像 + 近 7 天
+// V2 阶段三：今日建议
+async function loadToday(){
+  const head=document.getElementById('todayHeadline');
+  const meta=document.getElementById('todayMeta');
+  head.textContent='加载中…';meta.textContent='';
+  try{
+    const r=await fetch('/api/today');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    head.textContent=d.headline||'（无建议）';
+    let metaTxt=`来源：${d.source||'-'} · 投递池 ${d.stats?.applications_total||0} 条`;
+    if(d.stats?.last_log_date) metaTxt+=` · 最近日志 ${d.stats.last_log_date}`;
+    meta.textContent=metaTxt;
+    if(d.next_actions && d.next_actions.length){
+      head.title=d.reason+'\n\n下一步：\n• '+d.next_actions.join('\n• ');
+    }
+  }catch(e){head.textContent='加载失败：'+e.message;}
+}
+
+// 自动加载画像 + 近 7 天 + 今日建议
 loadProfile();
 loadDaily();
+loadToday();
 </script>
 </body>
 </html>

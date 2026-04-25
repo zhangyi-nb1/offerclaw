@@ -30,6 +30,16 @@ import requests as _requests
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
+# 自动加载 .env.local（本地私密 Key，不进 git），补充到环境变量
+_env_local = os.path.join(BASE_DIR, ".env.local")
+if os.path.exists(_env_local):
+    with open(_env_local, encoding="utf-8") as _f:
+        for _ln in _f:
+            _ln = _ln.strip()
+            if _ln and not _ln.startswith("#") and "=" in _ln:
+                _k, _v = _ln.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
 from logging_utils import (
     get_logger,
     request_logging_middleware,
@@ -112,6 +122,44 @@ class ResumeResponse(BaseModel):
     stories_preview: str = ""
 
 
+class TodayResponse(BaseModel):
+    today: str
+    headline: str
+    reason: str = ""
+    source: str = ""
+    next_actions: list[str] = []
+    stats: dict = {}
+
+
+class DiscoverRequest(BaseModel):
+    raw: str = ""
+    url: str = ""
+
+
+class DiscoverResponse(BaseModel):
+    company: str = ""
+    title: str = ""
+    location: str = ""
+    job_type: str = ""
+    skills_detected: list[str] = []
+    duties: str = ""
+    requirements: str = ""
+    raw_chars: int = 0
+    source_url: str = ""
+    jd_text: str = ""
+
+
+class ResumeBuildRequest(BaseModel):
+    jd_text: str
+    company: str = ""
+    title: str = ""
+
+
+class ResumeBuildResponse(BaseModel):
+    resume_md: str
+    jd_summary_chars: int = 0
+
+
 class ProfileResponse(BaseModel):
     name: str
     direction: list[str]
@@ -185,6 +233,9 @@ async def info():
             "GET /api/daily": "今日 daily_log + 最近 7 天摘要",
             "POST /api/daily": "向 daily_log.md 追加今日条目",
             "GET /api/resume": "简历素材聚合（pitch + 故事预览）",
+            "GET /api/today": "今日建议（聚合投递池 + 日志 + 状态机）",
+            "POST /api/discover": "JD 半自动抽取（粘贴或 URL → 结构化 JD）",
+            "POST /api/resume/build": "JD 定制简历项目段生成（基于事实清单 + LLM）",
             "POST /api/reset": "清空对话历史",
         },
     }
@@ -408,6 +459,49 @@ async def get_resume():
     except Exception as e:
         _log.exception("resume failed")
         raise HTTPException(status_code=500, detail=f"读取失败: {str(e)}")
+
+
+@app.get("/api/today", response_model=TodayResponse)
+async def get_today():
+    """V2 阶段三：聚合 applications + daily_log + profile，给一句"今天最该做什么"。"""
+    try:
+        from career_agent import get_today_advice
+        return TodayResponse(**get_today_advice())
+    except Exception as e:
+        _log.exception("today failed")
+        raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
+
+
+@app.post("/api/discover", response_model=DiscoverResponse)
+async def discover(req: DiscoverRequest):
+    """V2 阶段四：JD 半自动抽取。raw 文本或 URL 都可，返回结构化 JD。"""
+    try:
+        from job_discovery import discover as _disc
+        out = _disc(raw=req.raw, url=req.url)
+        return DiscoverResponse(**out)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        _log.exception("discover failed")
+        raise HTTPException(status_code=500, detail=f"抽取失败: {str(e)}")
+
+
+@app.post("/api/resume/build", response_model=ResumeBuildResponse)
+async def build_resume(req: ResumeBuildRequest):
+    """V2 阶段五：针对一份 JD 生成 OfferClaw 项目段（bullet + 段落 + 命中分析）。"""
+    try:
+        from resume_builder import build_resume_for_jd
+        meta = []
+        if req.company: meta.append(f"公司：{req.company}")
+        if req.title: meta.append(f"岗位：{req.title}")
+        meta.append("JD 原文：\n" + req.jd_text[:4000])
+        out = build_resume_for_jd("\n".join(meta))
+        return ResumeBuildResponse(**out)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        _log.exception("resume build failed")
+        raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
 
 
 @app.post("/api/stream")

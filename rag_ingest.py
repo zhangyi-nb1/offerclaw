@@ -48,6 +48,9 @@ DEFAULT_FILES = [
     "DATA_CONTRACT.md",
     "applications.md",
     "interview_story_bank.md",
+    # V2 阶段六：扩展投递闭环知识源
+    "docs/resume_pitch.md",
+    "docs/project_one_pager.md",
 ]
 
 
