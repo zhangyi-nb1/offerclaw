@@ -41,6 +41,13 @@ DEFAULT_FILES = [
     "SOUL.md",
     "target_rules.md",
     "source_policy.md",
+    "onboarding_prompt.md",
+    "job_match_prompt.md",
+    "plan_prompt.md",
+    "summary_prompt.md",
+    "DATA_CONTRACT.md",
+    "applications.md",
+    "interview_story_bank.md",
 ]
 
 

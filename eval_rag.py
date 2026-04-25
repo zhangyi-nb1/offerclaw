@@ -1,128 +1,154 @@
 # -*- coding: utf-8 -*-
 """
-OfferClaw · RAG 检索质量评估 (eval_rag.py)
+OfferClaw · RAG 检索质量评估 v2 (eval_rag.py)
 
-职责：
-    用一组"问题 + 期望命中来源"的 ground-truth，跑 ChromaDB 检索，
-    输出 Recall@K / MRR 指标。直接对应蔚来 JD 第 3 条
-    "研究与实践 RAG 相关评估方法，持续优化系统效果"。
-
-数据集：
-    内置一份 8 题的 OfferClaw 自评集（覆盖 SOUL / target_rules /
-    user_profile / source_policy / job_match_prompt / plan_prompt /
-    summary_prompt / README），每题指定期望命中的源文件名。
-
-指标：
-    - Recall@K：top-K 中是否至少命中一个期望源
-    - MRR：第一个命中的倒数排名（未命中=0）
+变化（v2）：
+- 黄金集移到 tests/rag_eval_set.json（50 题），含 fact / explain / cross_doc 三桶
+- 报指标时按"总体 + 分桶"分别输出
+- 支持 --json 导出结果到 logs/rag_eval_<时间>.json，方便 CI 和回归对比
+- 新增 --baseline 与上次结果比对，回归则非零退出码
 
 使用：
-    python eval_rag.py                # 默认 K=5
+    python eval_rag.py
     python eval_rag.py --k 3
-    python eval_rag.py --verbose      # 打印每题命中明细
+    python eval_rag.py --verbose
+    python eval_rag.py --json
+    python eval_rag.py --baseline logs/rag_eval_xxx.json
 """
 
+from __future__ import annotations
 import argparse
+import json
 import os
 import sys
-from typing import List, Dict
+import time
+from typing import Any
 
 import chromadb
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE)
 
-from rag_tools import get_embedding
+from rag_tools import get_embedding  # noqa: E402
 
 DB_DIR = os.path.join(BASE, "chroma_db")
 COLLECTION_NAME = "offerclaw_docs"
+EVAL_SET_PATH = os.path.join(BASE, "tests", "rag_eval_set.json")
 
 
-# 内置评估集：每题 → 期望命中源文件（substring 匹配）
-EVAL_SET: List[Dict] = [
-    {"q": "OfferClaw 的核心使命是什么？",
-     "expected_sources": ["SOUL.md"]},
-    {"q": "求职方向的主方向有哪些？",
-     "expected_sources": ["target_rules.md", "user_profile.md"]},
-    {"q": "三档投递结论分别是哪三档？",
-     "expected_sources": ["target_rules.md", "job_match_prompt.md"]},
-    {"q": "证据等级 A B C 分别代表什么？",
-     "expected_sources": ["source_policy.md"]},
-    {"q": "岗位匹配的硬门槛包括哪几项？",
-     "expected_sources": ["job_match_prompt.md", "target_rules.md"]},
-    {"q": "如何生成 4 周路线规划？",
-     "expected_sources": ["plan_prompt.md"]},
-    {"q": "学习留痕复盘的偏离度怎么判断？",
-     "expected_sources": ["summary_prompt.md"]},
-    {"q": "用户当前的学历和专业是什么？",
-     "expected_sources": ["user_profile.md"]},
-]
+def load_eval_set() -> list[dict]:
+    with open(EVAL_SET_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data["items"]
 
 
-def evaluate(k: int = 5, verbose: bool = False):
+def evaluate(k: int = 5, verbose: bool = False) -> dict[str, Any]:
     if not os.path.exists(DB_DIR):
-        print(f"[ERROR] {DB_DIR} 不存在，请先运行 python rag_ingest.py")
+        print(f"[ERROR] {DB_DIR} 不存在，请先 python rag_ingest.py")
+        sys.exit(1)
+    if not os.path.exists(EVAL_SET_PATH):
+        print(f"[ERROR] 评估集 {EVAL_SET_PATH} 不存在")
         sys.exit(1)
 
     client = chromadb.PersistentClient(path=DB_DIR)
-    try:
-        collection = client.get_collection(COLLECTION_NAME)
-    except Exception as e:
-        print(f"[ERROR] 取不到 collection: {e}")
-        sys.exit(1)
+    collection = client.get_collection(COLLECTION_NAME)
 
-    print(f"=== OfferClaw RAG 评估 (K={k}, N={len(EVAL_SET)}, DB={collection.count()} 块) ===\n")
+    items = load_eval_set()
+    n = len(items)
+    print(f"=== OfferClaw RAG 评估 v2 (K={k}, N={n}, DB={collection.count()} chunks) ===\n")
 
-    recall_hits = 0
-    mrr_sum = 0.0
-
-    for i, item in enumerate(EVAL_SET, 1):
+    per_item: list[dict] = []
+    for idx, item in enumerate(items, 1):
         q = item["q"]
         expected = item["expected_sources"]
+        cat = item.get("category", "uncategorized")
 
-        emb = get_embedding(q)
+        try:
+            emb = get_embedding(q)
+        except Exception as e:
+            print(f"[ERR] embedding fail Q{idx}: {e}")
+            per_item.append({"id": item.get("id", str(idx)), "category": cat,
+                             "hit": False, "rank": 0, "sources": [], "error": str(e)})
+            continue
+
         res = collection.query(query_embeddings=[emb], n_results=k)
-
         sources = [m.get("source", "") for m in res["metadatas"][0]]
 
-        # Recall@K
-        hit = any(any(exp in src for exp in expected) for src in sources)
-        if hit:
-            recall_hits += 1
-
-        # MRR
         rank = 0
         for j, src in enumerate(sources, 1):
             if any(exp in src for exp in expected):
                 rank = j
                 break
-        if rank > 0:
-            mrr_sum += 1.0 / rank
+        hit = rank > 0
 
-        status = "[HIT]" if hit else "[MISS]"
-        print(f"{status} Q{i}: {q}")
-        print(f"      期望: {expected}")
-        print(f"      Top{k}: {sources}")
+        per_item.append({
+            "id": item.get("id", str(idx)),
+            "category": cat,
+            "q": q,
+            "expected": expected,
+            "sources": sources,
+            "hit": hit,
+            "rank": rank,
+        })
+
+        flag = "[HIT] " if hit else "[MISS]"
+        print(f"{flag} {item.get('id','?'):>4} ({cat:<9}) {q}")
+        if not hit or verbose:
+            print(f"       expect: {expected}")
+            print(f"       top{k}:  {sources}")
         if verbose:
             for j, (s, doc) in enumerate(zip(sources, res["documents"][0]), 1):
-                print(f"        #{j} {s} :: {doc[:80].replace(chr(10), ' ')}...")
-        print()
+                print(f"        #{j} {s} :: {doc[:80].replace(chr(10),' ')}...")
 
-    n = len(EVAL_SET)
-    recall_at_k = recall_hits / n
-    mrr = mrr_sum / n
+    def metrics(rows: list[dict]) -> dict:
+        if not rows:
+            return {"n": 0, "recall_at_k": 0.0, "mrr": 0.0, "hits": 0}
+        hits = sum(1 for r in rows if r["hit"])
+        mrr = sum((1.0 / r["rank"]) for r in rows if r["rank"] > 0) / len(rows)
+        return {"n": len(rows), "recall_at_k": hits / len(rows), "mrr": mrr, "hits": hits}
 
-    print("=" * 60)
-    print(f"Recall@{k} = {recall_at_k:.3f}  ({recall_hits}/{n})")
-    print(f"MRR        = {mrr:.3f}")
-    print("=" * 60)
-    return {"recall_at_k": recall_at_k, "mrr": mrr, "k": k, "n": n}
+    overall = metrics(per_item)
+    by_cat: dict[str, dict] = {}
+    for cat in sorted({r["category"] for r in per_item}):
+        rows = [r for r in per_item if r["category"] == cat]
+        by_cat[cat] = metrics(rows)
+
+    print()
+    print("=" * 64)
+    print(f"{'bucket':<12}{'N':>4}  Recall@{k:<2}    MRR")
+    print("-" * 64)
+    print(f"{'overall':<12}{overall['n']:>4}    {overall['recall_at_k']:.3f}    {overall['mrr']:.3f}")
+    for cat, m in by_cat.items():
+        print(f"{cat:<12}{m['n']:>4}    {m['recall_at_k']:.3f}    {m['mrr']:.3f}")
+    print("=" * 64)
+
+    return {
+        "k": k, "n": n, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "overall": overall, "by_category": by_cat,
+        "per_item": per_item,
+    }
 
 
-def main():
-    parser = argparse.ArgumentParser(description="RAG 检索质量评估")
+def compare_baseline(current: dict, baseline_path: str) -> int:
+    with open(baseline_path, "r", encoding="utf-8") as f:
+        base = json.load(f)
+    cur_r = current["overall"]["recall_at_k"]
+    base_r = base["overall"]["recall_at_k"]
+    delta = cur_r - base_r
+    print(f"\n[Baseline] Recall@K: {base_r:.3f} -> {cur_r:.3f} (delta={delta:+.3f})")
+    if delta < -0.02:
+        print("[REGRESS] recall dropped >0.02")
+        return 1
+    print("[OK] no regression")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="RAG eval v2")
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--verbose", "-v", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--baseline")
     args = parser.parse_args()
 
     try:
@@ -130,8 +156,19 @@ def main():
     except Exception:
         pass
 
-    evaluate(k=args.k, verbose=args.verbose)
+    result = evaluate(k=args.k, verbose=args.verbose)
+
+    if args.json:
+        os.makedirs(os.path.join(BASE, "logs"), exist_ok=True)
+        out = os.path.join(BASE, "logs", f"rag_eval_{time.strftime('%Y%m%d_%H%M%S')}.json")
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        print(f"\n[exported] {out}")
+
+    if args.baseline:
+        return compare_baseline(result, args.baseline)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
