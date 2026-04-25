@@ -14,7 +14,19 @@
   2. 2026-05-01 前成长为可写进简历的 AI 应用 / Agent 项目
 - **最终形态**：适用于各类用户形象的通用智能体（当前用项目作者做训练验证）
 - **状态更新时间**：2026-04-25
-- **版本**：V1.5 · 阶段 C（RAG + FastAPI + LangGraph 已交付 → 简历公开化 → 投递准备）
+- **版本**：V1.5 · 阶段 C **100%**（CareerOps 报告 8/8 借鉴 + 1/1 修补全部落地，RAG 评估扩到 50 题 3 桶，pytest 37/37）
+
+## V1.5 收口期（当前）— 报告对照完成度 100%
+
+| 维度 | 状态 |
+|---|---|
+| 8 个 Career-Ops 借鉴 | ✅ 8/8（DATA_CONTRACT / applications / story_bank / one_pager / postmortem / ethical_use / doctor / verify_pipeline） |
+| 1 个修补（rag_api 去硬编码） | ✅ |
+| 阶段 A（简历可投递收口） | ✅ 100% |
+| 阶段 B（求职运营闭环） | ✅ 100% |
+| 阶段 C（工程可信度 + 测试） | ✅ 100%（test_api.py + test_pipeline.py 已补，37 用例全过） |
+
+**下一步**：不再加新功能，进入"投递+面试"使用阶段；只做 Recall miss 调优 + UI 微调 + 截图录屏。
 - **GitHub 仓库**：https://github.com/zhangyi-nb1/offerclaw （2026-04-21 首次推送）
 
 ---

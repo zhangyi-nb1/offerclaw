@@ -10,10 +10,19 @@ git clone https://github.com/zhangyi-nb1/offerclaw.git
 cd offerclaw
 pip install -r requirements.txt
 echo "ZHIPU_API_KEY=<your_key_id>.<your_signing_secret>" > .env.local
-python rag_ingest.py        # 把 7+ md 文件灌入 ChromaDB
+python rag_ingest.py        # 把 12 个 md 文件灌入 ChromaDB
 ```
 
-预期输出：`[OK] ingested 50 chunks into chroma_db/offerclaw_docs`
+预期输出：`[OK] ingested 118 chunks into chroma_db/offerclaw_docs`
+
+## 0.5 一键体检（演示前必跑）
+
+```bash
+python doctor.py            # 7 类健康检查（API Key / 关键文件 / Chroma / 评估集 / 端口 / Python / Git）
+python verify_pipeline.py   # 6 步主链路冒烟（profile → match → plan → summary → rag → /health）
+```
+
+预期：`doctor.py` → `8 OK / 1 WARN / 0 ERR`；`verify_pipeline.py` → `6/6 通过`。任何一项红立即停演。
 
 ## 1. 单命令端到端闭环（pipeline）
 
@@ -40,13 +49,15 @@ python summary_tool.py --date 2026-04-25  # 单日
 ## 3. RAG 评估（蔚来 JD 命中点）
 
 ```bash
-python eval_rag.py --k 5 --verbose
+python eval_rag.py --k 5
+python eval_rag.py --k 5 --baseline tests/rag_eval_baseline.json    # 与基线回归对比
 ```
 
-预期：
+预期（自建 50 题 3 桶集）：
 ```
-Recall@5 = 0.750  (6/8)
-MRR        = 0.688
+Recall@5 = 0.960  (48/50)
+MRR        = 0.740
+桶级：cross_doc 1.000 · explain 0.944 · fact 0.941
 ```
 
 ## 4. LangGraph 状态机（单次问答）
@@ -74,7 +85,9 @@ curl -N -X POST http://127.0.0.1:8000/api/stream \
 
 预期：先收到一行 `event: meta`，然后逐 token `data: {"delta":"Offer"}`...
 
-浏览器：`http://127.0.0.1:8000/docs` 看 Swagger，6 个接口可点击试。
+浏览器入口：
+- `http://127.0.0.1:8000/`     → 自动 302 到 `/ui`（友好 Web 控制台）
+- `http://127.0.0.1:8000/docs` → Swagger UI（11 个接口可点击试）
 
 ## 6. 测试套件
 
@@ -82,7 +95,7 @@ curl -N -X POST http://127.0.0.1:8000/api/stream \
 python -m pytest tests/ -v
 ```
 
-预期：`17 passed, 1 skipped`（含 12 个多 persona 参数化用例）。
+预期：`37 passed, 3 skipped`（含 12 个 multi-persona × multi-JD 参数化 + FastAPI TestClient 接口测 + 6 步主链路冒烟；3 e2e 默认跳过，需 `OFFERCLAW_E2E=1` 才跑真智谱 API）。
 
 ## 7. 截图位（录屏时打）
 

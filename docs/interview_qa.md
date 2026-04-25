@@ -17,16 +17,17 @@
 
 ---
 
-## Q3: ChromaDB 50 chunks 性能够吗？后续怎么扩？
+## Q3: ChromaDB 118 chunks 性能够吗？后续怎么扩？
 
-**A**：当前是个人项目，全量 50 chunks 单次查询 < 50ms，PersistentClient SQLite 落盘足够。扩展路径：① chunks > 10 万走 HNSW 索引调参（M、ef_construction）；② chunks > 100 万切到 Milvus / Qdrant；③ 加 metadata filter（按 source 预筛）减小搜索域。
+**A**：当前是个人项目，全量 118 chunks 单次查询 < 50ms，PersistentClient SQLite 落盘足够。扩展路径：① chunks > 10 万走 HNSW 索引调参（M、ef_construction）；② chunks > 100 万切到 Milvus / Qdrant；③ 加 metadata filter（按 source 预筛）减小搜索域。
 
 ---
 
-## Q4: Recall@5=0.75 意味着什么？怎么把它提到 0.9+？
+## Q4: Recall@5 = 0.96 意味着什么？怎么把它提到 1.0？
 
-**A**：8 题里 6 题 top-5 命中期望源。两个 miss 都是 prompt 类问题（"如何生成 4 周路线"，"留痕复盘偏离度"）—— 根因是 `plan_prompt.md` / `summary_prompt.md` 在 ingest 时被分块切碎，关键词分散到不同 chunk。
-**优化方案**：① 调小 chunk_overlap，按 ## 标题强制保留语义单元；② 加 LLM rerank（先 top-20 召回，再让小模型按"与查询的相关性"打分，取 top-5）；③ 扩评估集到 30+ 题做 ablation。
+**A**：自建 50 题 3 桶集（fact / explain / cross_doc）共 50 题，48 题 top-5 命中期望源；分桶看 cross_doc 1.000、explain 0.944、fact 0.941。
+**两个 miss 案例已定位**：① `f03`（"目标方向第一优先级"）被 SOUL.md 抢占；② `e05`（"识别伪造信息"）被 DATA_CONTRACT.md 抢占。两者根因都是 chunk 边界把关键句切碎了。
+**下一步**：① 调小 chunk_overlap，按 ## 二级标题强制保留语义单元；② 加 LLM rerank（top-20 → top-5）；③ 扩评估集到 100 题做 ablation；④ baseline 写进 `tests/rag_eval_baseline.json` 实现回归对比。
 
 ---
 
@@ -51,13 +52,15 @@
 
 ---
 
-## Q8: pytest 17 个用例，哪些是真正"防御性"的？
+## Q8: pytest 37 个用例，哪些是真正"防御性"的？
 
-**A**：核心防御性用例 3 类：
-1. **三档结论枚举校验**（`test_match_demo_runs`）—— 防止有人改了规则把结论字符串写错；
-2. **persona schema 校验**（`test_persona_schema`）—— 防止新增 persona JSON 漏字段，跑到 run_match 才崩；
-3. **multi-persona × multi-JD 参数化**（12 用例）—— 任何人改 match_job 规则后能立即看到副作用。
-其余几个是工具函数 unit test。下一步会加 API 接口的 httpx + pytest-asyncio 集成测。
+**A**：核心防御性用例 4 类：
+1. **三档结论枚举校验**（`test_match_demo_runs`）—— 防止改规则把结论字符串写错；
+2. **persona schema 校验**（`test_persona_schema`）—— 防止新增 persona JSON 漏字段；
+3. **multi-persona × multi-JD 参数化**（12 用例）—— 改 match_job 规则后立即看到副作用；
+4. **FastAPI TestClient 接口测 + 主链路冒烟**（`tests/test_api.py` + `tests/test_pipeline.py`，新增 19 用例）—— 不依赖 LLM 的 8 个离线 + 3 个 e2e（默认跳过，OFFERCLAW_E2E=1 才跑）+ 6 步主链路 smoke。
+
+总计 37 通过，3 e2e 待 flag 触发。
 
 ---
 
@@ -67,7 +70,29 @@
 
 ---
 
-## Q10（反问对方）
+## Q10～Q15: 高频追问（六连问）
+
+### Q10: 为什么不直接用 LangChain Agent / LlamaIndex？
+**A**：① LangChain Agent 黑盒太多，工具循环和 prompt 拼装藏在内部，调试困难；② LlamaIndex 偏向"知识库 + RAG"重场景，我这里需要"规则 + LLM + RAG"混合编排，LangGraph 的状态机更直白；③ 项目要写进简历，需要"我能讲清每一步为什么"——黑盒越少越好。LangGraph + 直调 requests + 手写 JWT 让每一行都可解释。
+
+### Q11: 为什么评估集只有 50 题？是不是太少？
+**A**：完全同意小，所以 README/简历都标了"**自建小规模评估集**"，不冒充通用基准。50 题是单人项目能负担的标注成本天花板（每题要写 q + 至少一个 expected_source）。3 桶设计是为了能看到分项弱点（fact / explain / cross_doc）。下一步 100 题，再下一步引入合成数据 + 人工抽检。
+
+### Q12: `/api/profile` 是不是写死的 demo 数据？
+**A**：之前是，现在不是。当前实现 `_parse_profile()` 用正则从 `user_profile.md` 解析 name / direction / skills / updated_at，user_profile.md 改名（比如 Zhang Yi → 张三）API 返回会跟着变。可以现场 demo：改文件 → curl /api/profile 立刻看到新值。这是"画像驱动"主张的最小证据。
+
+### Q13: ChromaDB vs FAISS / Milvus / Qdrant 怎么选的？
+**A**：① 单人项目 100~10000 chunks 量级，FAISS 要自己管持久化和元数据，麻烦；② Milvus / Qdrant 要起 server，部署成本高；③ ChromaDB PersistentClient 直接 SQLite 落盘，自带元数据 filter，单文件可移植。**取舍**：放弃了"分布式 / 千万级"，换"零部署 / 直接可演示"。这是写在 `docs/postmortem.md` 的第 1 条取舍。
+
+### Q14: Agent 会不会乱改我的画像？怎么保证？
+**A**：写在 `DATA_CONTRACT.md` 的 7 条不变量第 1 条：**Agent 永不直接修改 `user_profile.md`**。所有"画像更新建议"通过两条路径：① 写到 `summaries/` 让用户人工确认后回写；② 写到 `memory.json` 作为 Agent 短期记忆，和 user 层物理隔离。User Layer / System Layer / Runtime Layer 的边界写在 contract 里，doctor.py 会检查这三层目录是否齐全。
+
+### Q15: 智谱 `embedding-3` 为什么选这个？换 OpenAI / BGE 行不行？
+**A**：① 国产合规，对个人项目演示场景没出海/付款心智成本；② 2048 维语义足够，比 text-embedding-3-small 的 1536 还多；③ 与 GLM-4-Flash 同栈一份 JWT 签名搞定。**换不行吗？** 完全可以，`rag_tools.py` 把 embedding 调用收敛到一个函数 `get_embedding()`，换 BGE 只要改这一处 + 重新 ingest 一次 chroma。这是"接口收敛"的好处。
+
+---
+
+## Q16（反问对方）
 
 可以问招聘官的：
 - 团队当前在 RAG 上的主要瓶颈是检索质量、生成质量、工程化，还是评估方法？
