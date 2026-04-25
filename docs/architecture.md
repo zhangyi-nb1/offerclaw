@@ -10,9 +10,9 @@ graph TB
     User[👤 求职者<br/>Zhang Yi]
     JVS[JVS Claw 平台<br/>对话入口]
     OC[OfferClaw Agent<br/>本仓库]
-    Zhipu[智谱 BigModel<br/>GLM-4-Flash + Embedding-3]
-    Files[(本地知识库<br/>SOUL/profile/rules/<br/>jd_candidates 等 7+ md)]
-    Chroma[(ChromaDB<br/>50 个 chunk × 2048 维)]
+    Zhipu[智谱 BigModel<br/>GLM-4-Flash + embedding-3]
+    Files[(本地知识库<br/>SOUL/profile/rules/<br/>jd_candidates 等 12 份 md)]
+    Chroma[(ChromaDB<br/>118 个 chunk × 2048 维)]
 
     User --对话--> JVS
     JVS --HTTP--> OC
@@ -111,21 +111,24 @@ stateDiagram-v2
 
 | 选择 | 理由 |
 |------|------|
-| 智谱 GLM-4-Flash + Embedding-3 | 国产合规、JWT 鉴权清晰、embedding-3 输出 2048 维语义足够 |
+| 智谱 GLM-4-Flash + embedding-3 | 国产合规、JWT 鉴权清晰、embedding-3 输出 2048 维语义足够 |
 | ChromaDB（PersistentClient） | 零运维、SQLite 落盘、本地可重放 |
 | LangGraph 状态机 | 显式声明 retrieve→prompt→llm→tools；对应蔚来 JD "调用链路编排" |
 | FastAPI + SSE | 流式输出对齐 ChatGPT 体验；middleware 统一日志 |
 | 规则 + LLM 混合 | match_job 确定性可解释、plan_gen 用 LLM 生成性内容；不让模型编硬门槛 |
 | .env.local + .gitignore | 密钥不入 git，跨设备拉取后只需复制 .env.local |
 
-## 6. 评估指标 (V1 基线)
+## 6. 评估指标 (V1.5 当前)
 
 | 指标 | 数值 | 数据集 |
 |------|------|--------|
-| Recall@5 | **0.750** (6/8) | OfferClaw 自评集 8 题 |
-| MRR | **0.688** | 同上 |
-| pytest 通过率 | **17/18** (1 skip) | tests/ |
+| Recall@5 | **0.96** (48/50) | 自建 50 题 3 桶集（fact/explain/cross_doc） |
+| MRR | **0.74** | 同上 |
+| 桶级 | cross_doc **1.000** · explain **0.944** · fact **0.941** | 同上 |
+| pytest 通过率 | **37/37**（+3 e2e skip） | tests/ |
 | 端到端流水线时延 | ~30s | pipeline.py（含 1 次 LLM 调用） |
 | SSE 首 token 时延 | ~1-2s | /api/stream |
+
+> 现场命令输出见 [`docs/verification_report.md`](verification_report.md)。
 
 下一步优化：见 `eval_rag.py` Q6/Q7 miss 案例 → V2 引入 LLM rerank。

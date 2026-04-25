@@ -29,18 +29,26 @@ env/
 # ===== 历史参考文档（不由项目维护） =====
 OfferClaw_Claude_直接投喂提示词.md
 OfferClaw_项目与竞赛推进指导报告.docx
+OfferClaw_整体演进规划方案.md
+OfferClaw_CareerOps_项目优化实验规划报告.md
 
 # ===== OfferClaw 运行时产物 =====
 # 向量数据库（本地目录，不入 git）
 chroma_db/
 chroma_db_test/
 memory.json
+memory/
 plans/
 summaries/
 logs/
 
 # ===== 本地私密备忘 =====
-# 命令速查 / 笔记等私人文件，不入 git
+# 命令速查 / 笔记 / 临时文件，不入 git
 1
-*.local.md
+1.txt
+2
 notes.txt
+*.local.md
+docs/archive/
+
+_local_notes/

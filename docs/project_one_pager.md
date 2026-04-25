@@ -17,7 +17,7 @@
 | JD 看了 100 份还不知道哪些适合 | 三档结论：适合 / 暂不 / 中长期可转向 |
 | 知道方向但不知道下一步学什么 | 4 周计划生成（按画像缺口排序） |
 | 学了忘了，没复盘 | daily_log + 周度 summary |
-| 想问项目状态，要翻 9 份 markdown | RAG 知识库问答（Recall@5 = 0.75） |
+| 想问项目状态，要翻 12 份 markdown | RAG 知识库问答（自建 50 题 3 桶集 · Recall@5 = 0.96） |
 | 投递后没有 tracker | applications.md + 状态机 |
 
 ## 4. 系统架构
@@ -34,9 +34,9 @@
 ## 5. 核心模块
 - **match_job.py** — 规则 + LLM 双通路岗位匹配（硬否决在规则层，软评估在 LLM 层）
 - **rag_graph.py** — LangGraph 工作流：retrieve → rerank → answer，带显式 State
-- **rag_api.py** — 11 个 FastAPI 接口 + JSON 日志 + request_id 中间件
+- **rag_api.py** — 11 个 FastAPI 路由（5 核心业务 + 6 辅助/系统）+ JSON 日志 + request_id 中间件
 - **tools.py** — 6 个 Agent 工具：profile / rules / log / plan / match / summary
-- **eval_rag.py** — Recall@K + MRR 黄金集（8 题）
+- **eval_rag.py** — Recall@K + MRR + 桶级指标 + baseline 回归（自建 50 题 3 桶集）
 - **static/index.html** — 零依赖前端控制台
 
 ## 6. 技术栈
@@ -45,16 +45,19 @@ Python 3.13 · FastAPI · LangGraph · ChromaDB · 智谱 GLM-4 / embedding-3 ·
 ## 7. 当前指标
 | 指标 | 值 |
 |---|---|
-| 测试用例 | 17/17 通过 |
-| RAG 召回 | Recall@5 = 0.75 / MRR = 0.69 |
-| FastAPI 接口 | 11 个 |
-| Persona 回归组合 | 3 personas × 4 JDs = 12 case |
-| 知识库条数 | 50 chunks（9 份 markdown） |
+| 测试用例 | **37/37** 通过（+3 e2e skip，需 OFFERCLAW_E2E=1） |
+| RAG 召回（自建 50 题 3 桶集） | Recall@5 = **0.96** / MRR = **0.74** |
+| FastAPI 路由 | **11**（5 核心业务 + 6 辅助/系统） |
+| Persona 回归 | 3 personas × 4 JDs = 12 case |
+| 知识库 | **118 chunks**（12 份 markdown） |
+| 工程自检 | doctor 8 OK · verify_pipeline 6/6 |
 | 端到端首字延迟 | < 2s（SSE 流式） |
+
+> 全部指标的现场命令输出固化在 [`docs/verification_report.md`](verification_report.md)。
 
 ## 8. Demo 链路（≤2 分钟）
 1. `python -m uvicorn rag_api:app` → 浏览器打开 `http://127.0.0.1:8000`
-2. 点 **系统健康** → 看 `chroma_db: connected, 50 records`
+2. 点 **系统健康** → 看 `chroma_db: connected, 118 records`
 3. 点 **看用户画像** → 显示 §0 元信息 + 方向 + 技能
 4. 粘 NIO JD → 点 **运行匹配** → 输出三档结论 + 缺口清单
 5. 输入 "OfferClaw 主方向是什么？" → 流式问答（fetch + ReadableStream）
@@ -69,7 +72,7 @@ Python 3.13 · FastAPI · LangGraph · ChromaDB · 智谱 GLM-4 / embedding-3 ·
 ## 10. 当前不足与下一步
 | 不足 | V2 计划 |
 |---|---|
-| RAG 评估集只有 8 题 | 扩到 50+ 题 + 引入 hit-rate 分桶 |
+| RAG 评估集 50 题（自建小规模） | 扩到 100+ 题 + 桶内难度分级；当前 miss 2 题（f03/e05）已定位 |
 | 没有 LLM Reranker | 加 BGE-reranker 或 GLM-4 二阶段 rerank |
 | applications.md 是手维护表 | 迁 SQLite + 自动化状态机 |
 | 没有 CI / Docker | GitHub Actions + Dockerfile |

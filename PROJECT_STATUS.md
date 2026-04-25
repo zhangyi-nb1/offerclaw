@@ -322,7 +322,7 @@ __start__
 - **本批结果**：代码实现层完成度从 30% → 65%，OfferClaw V1 从"只有 Prompt + 规则脚本"跃迁到"有自己写的 Agent 代码"——可对外演示、可写进简历
 
 ### 第九批 · RAG + LangGraph + FastAPI（V1.5，2026-04-22 ~ 04-25）
-- **`rag_ingest.py` + `rag_tools.py`**：文档入库链路（RecursiveCharacterTextSplitter 分块 → glm-4-embed 向量化 → ChromaDB 持久化）；工具函数（分块 / Embedding / 检索 / LLM 调用）
+- **`rag_ingest.py` + `rag_tools.py`**：文档入库链路（RecursiveCharacterTextSplitter 分块 → 智谱 `embedding-3` 向量化 → ChromaDB 持久化）；工具函数（分块 / Embedding / 检索 / LLM 调用）
 - **`rag_agent.py`（手动编排）**：检索 → Prompt 注入 → LLM → 回答，完整 RAG 问答链路
 - **`rag_graph.py`（LangGraph 声明式工作流）**：4 节点 StateGraph（retrieve → build_prompt → call_llm → execute_tools），条件边自动路由工具循环
 - **`rag_api.py`（FastAPI 接口层）**：6 端点（`/health` · `/api/profile` · `/api/query` · `/api/search` · `/api/match` · `/api/reset`）+ Swagger UI 自动文档 + SSE 流式支持

@@ -1,8 +1,9 @@
-# OfferClaw · Day 1 Task 2 · JD 候选池
+# OfferClaw · JD 候选池（**测试池**，非投递池）
 
-> 本文件用于收集 **7 份** 地域 + 方向都匹配的实习 JD 原文，供后续用
-> `job_match_prompt.md` 回跑做横向对比。
-> 今天只做"搜集 + 粘贴"，不做匹配分析——匹配在 Day 3 或之后统一处理。
+> ⚠️ **测试池 ≠ 投递池**。
+> 本文件用于收集 ≥ 7 份地域 + 方向都匹配的实习 JD 原文，作为 `match_job` / `eval_rag` 的**回归对照样本**；
+> 真实投递记录请见 [`applications.md`](applications.md)（同一岗位决定投递时同步两边）。
+> 写入规则：见 `DATA_CONTRACT.md` §4。
 
 ---
 
