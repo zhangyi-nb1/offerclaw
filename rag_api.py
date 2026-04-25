@@ -15,22 +15,36 @@ OfferClaw · FastAPI 服务层
   curl -X POST http://localhost:8000/api/query -d '{"query": "我的求职方向"}'
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
+import json
 import os
 import sys
 import datetime
+
+import requests as _requests
 
 # 确保能找到 rag_tools
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
+from logging_utils import (
+    get_logger,
+    request_logging_middleware,
+    current_request_id,
+)
+
 app = FastAPI(
     title="OfferClaw API",
-    description="求职作战 Agent 的 HTTP API 接口层（RAG + 岗位匹配 + 用户画像）",
-    version="1.0.0",
+    description="求职作战 Agent 的 HTTP API 接口层（RAG + 岗位匹配 + 用户画像 + SSE 流式）",
+    version="1.1.0",
 )
+
+app.middleware("http")(request_logging_middleware)
+
+_log = get_logger("offerclaw.api")
 
 # 延迟加载 RAG Agent（避免启动时阻塞）
 _rag_agent = None
@@ -209,13 +223,98 @@ async def rag_search(req: QueryRequest):
 @app.post("/api/match", response_model=MatchResponse)
 async def job_match(req: MatchRequest):
     """
-    岗位匹配接口（占位实现）。
-    后续对接 job_match_prompt.md 的完整 9 步流程。
+    岗位匹配接口：调用 match_job.run_match 真实跑出三档结论。
     """
-    return MatchResponse(
-        status="stub",
-        summary="岗位匹配模块尚未完全实现。当前版本仅接收 JD 文本，完整匹配分析需调用 job_match_prompt.md 流程。",
+    try:
+        from match_job import run_match, format_report, DEMO_PROFILE
+        report = run_match(DEMO_PROFILE, req.jd_text, jd_title="API 请求")
+        return MatchResponse(
+            status=report.conclusion,
+            summary=format_report(report),
+        )
+    except Exception as e:
+        _log.exception("match failed")
+        raise HTTPException(status_code=500, detail=f"匹配失败: {str(e)}")
+
+
+@app.post("/api/stream")
+async def rag_stream(req: QueryRequest):
+    """
+    SSE 流式问答接口。
+    用智谱 stream=True 把 token 实时推送给前端，模拟 ChatGPT 体验。
+    对应蔚来 JD：端到端 LLM 应用工作流 / API 服务集成。
+    """
+    from rag_tools import generate_zhipu_token, get_embedding, LLM_MODEL
+    import chromadb
+
+    rid = current_request_id()
+    _log.info(f"stream start q={req.query[:60]!r}")
+
+    # 1) 检索（可选）
+    context_block = ""
+    retrieval_count = 0
+    if req.use_retrieval:
+        db_dir = os.path.join(BASE_DIR, "chroma_db")
+        if os.path.exists(db_dir):
+            try:
+                client = chromadb.PersistentClient(path=db_dir)
+                col = client.get_collection("offerclaw_docs")
+                emb = get_embedding(req.query)
+                res = col.query(query_embeddings=[emb], n_results=req.top_k)
+                docs = res["documents"][0]
+                metas = res["metadatas"][0]
+                retrieval_count = len(docs)
+                parts = [
+                    f"[片段{i+1}] 来源: {metas[i].get('source','?')}\n{docs[i][:300]}"
+                    for i in range(retrieval_count)
+                ]
+                context_block = "\n\n---\n\n".join(parts)
+            except Exception as e:
+                _log.warning(f"retrieval failed: {e}")
+
+    system = (
+        "你是 OfferClaw，求职作战助手。基于下面的检索片段回答用户问题，"
+        "片段中没有的内容请如实告知，不要编造。\n\n【检索片段】\n"
+        + (context_block or "（本次无检索结果）")
     )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": req.query},
+    ]
+
+    def gen():
+        yield f"event: meta\ndata: {json.dumps({'request_id': rid, 'retrieval_count': retrieval_count}, ensure_ascii=False)}\n\n"
+        try:
+            token = generate_zhipu_token()
+            with _requests.post(
+                "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"model": LLM_MODEL, "messages": messages, "stream": True},
+                stream=True,
+                timeout=120,
+            ) as resp:
+                resp.raise_for_status()
+                for raw in resp.iter_lines(decode_unicode=True):
+                    if not raw:
+                        continue
+                    if raw.startswith("data: "):
+                        chunk = raw[6:]
+                        if chunk.strip() == "[DONE]":
+                            break
+                        try:
+                            j = json.loads(chunk)
+                            delta = j["choices"][0].get("delta", {}).get("content", "")
+                            if delta:
+                                yield f"data: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
+                        except Exception:
+                            continue
+            yield "event: done\ndata: {}\n\n"
+            _log.info("stream done")
+        except Exception as e:
+            _log.exception("stream failed")
+            yield f"event: error\ndata: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @app.post("/api/reset")
