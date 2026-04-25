@@ -35,9 +35,10 @@ from rag_tools import (
     get_embedding,
     chat_with_llm,
     generate_zhipu_token,
-    ZHIPU_API_KEY,
     LLM_MODEL,
 )
+
+HAS_API_KEY = bool(os.environ.get("ZHIPU_API_KEY"))
 
 import chromadb
 
@@ -91,22 +92,7 @@ def tool_search_docs(collection, arguments: dict, top_k: int = DEFAULT_TOP_K) ->
 
     query = arguments.get("query", "")
 
-    # 获取查询向量
-    if ZHIPU_API_KEY == "YOUR_API_KEY_HERE":
-        import hashlib, struct
-        h = hashlib.sha256(query.encode("utf-8")).digest()
-        extended = b""
-        while len(extended) < 384 * 4:
-            h = hashlib.sha256(h).digest()
-            extended += h
-        floats = struct.unpack("384f", extended[:384 * 4])
-        mn, mx = min(floats), max(floats)
-        if mx == mn:
-            query_embedding = [0.5] * 384
-        else:
-            query_embedding = [(v - mn) / (mx - mn) for v in floats]
-    else:
-        query_embedding = get_embedding(query)
+    query_embedding = get_embedding(query)
 
     # 检索
     results = collection.query(
@@ -220,22 +206,7 @@ def node_retrieve(state: AgentState, collection=None) -> dict:
     if not use_retrieval or collection is None:
         return {"retrieved_docs": [], "tool_call_count": 0}
 
-    # 获取查询向量
-    if ZHIPU_API_KEY == "YOUR_API_KEY_HERE":
-        import hashlib, struct
-        h = hashlib.sha256(query.encode("utf-8")).digest()
-        extended = b""
-        while len(extended) < 384 * 4:
-            h = hashlib.sha256(h).digest()
-            extended += h
-        floats = struct.unpack("384f", extended[:384 * 4])
-        mn, mx = min(floats), max(floats)
-        if mx == mn:
-            query_embedding = [0.5] * 384
-        else:
-            query_embedding = [(v - mn) / (mx - mn) for v in floats]
-    else:
-        query_embedding = get_embedding(query)
+    query_embedding = get_embedding(query)
 
     # 检索
     results = collection.query(
@@ -284,12 +255,29 @@ def node_build_prompt(state: AgentState) -> dict:
     return {"messages": messages}
 
 
+def _msg_to_dict(m):
+    """把 LangChain BaseMessage 或 dict 统一转回 OpenAI dict 格式。"""
+    if isinstance(m, dict):
+        return m
+    role_map = {"system": "system", "human": "user", "ai": "assistant", "tool": "tool"}
+    role = role_map.get(getattr(m, "type", ""), "user")
+    d = {"role": role, "content": getattr(m, "content", "") or ""}
+    ak = getattr(m, "additional_kwargs", {}) or {}
+    tc = getattr(m, "tool_calls", None) or ak.get("tool_calls")
+    if tc:
+        d["tool_calls"] = tc
+    if role == "tool":
+        d["tool_call_id"] = getattr(m, "tool_call_id", "") or ak.get("tool_call_id", "")
+        d["name"] = getattr(m, "name", "") or ak.get("name", "")
+    return d
+
+
 def node_call_llm(state: AgentState) -> dict:
     """
     节点 3：调用 LLM
     传入 tools，LLM 可能返回工具调用。
     """
-    messages = state["messages"]
+    messages = [_msg_to_dict(m) for m in state["messages"]]
 
     token = generate_zhipu_token()
 
@@ -336,7 +324,7 @@ def node_execute_tools(state: AgentState, collection=None) -> dict:
     根据 LLM 的 tool_calls 执行对应工具，结果追加到消息列表。
     """
     messages = state["messages"]
-    last_message = messages[-1]
+    last_message = _msg_to_dict(messages[-1])
     tool_calls = last_message.get("tool_calls", [])
 
     if not tool_calls:
@@ -381,7 +369,7 @@ def should_continue_to_tools(state: AgentState) -> str:
     if not messages:
         return END
 
-    last_message = messages[-1]
+    last_message = _msg_to_dict(messages[-1])
     tool_calls = last_message.get("tool_calls")
 
     if tool_calls:
@@ -461,7 +449,7 @@ def main():
     print("OfferClaw LangGraph Agent V1")
     print(f"检索: {'启用' if not args.no_retrieval else '禁用'}")
     print(f"架构: LangGraph 状态机（retrieve → build_prompt → call_llm → tools）")
-    print(f"API Key: {'已配置' if ZHIPU_API_KEY != 'YOUR_API_KEY_HERE' else '⚠️ 未配置'}")
+    print(f"API Key: {'已配置' if HAS_API_KEY else '[MISS] 未配置'}")
     print("=" * 60)
     print()
 
@@ -482,7 +470,7 @@ def main():
 
     if args.query:
         # 单次查询
-        print(f"💬 用户: {args.query}")
+        print(f"[USER] {args.query}")
         print(f"\n[GRAPH] 开始执行工作流...")
 
         initial_state = {
@@ -505,7 +493,7 @@ def main():
         print(f"\n[GRAPH] 执行完成")
         print(f"  检索到 {doc_count} 条片段")
         print(f"  工具调用 {tool_count} 次")
-        print(f"\n🤖 OfferClaw: {answer}")
+        print(f"\n[BOT] OfferClaw: {answer}")
     else:
         # 交互模式
         print("OfferClaw LangGraph 交互模式（输入 'quit' 退出）")
@@ -515,7 +503,7 @@ def main():
 
         while True:
             try:
-                query = input("\n💬 你: ").strip()
+                query = input("\n[YOU] ").strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n再见！")
                 break
@@ -524,7 +512,7 @@ def main():
                 continue
 
             if query.lower() in ("quit", "exit", "q"):
-                print("👋 再见！")
+                print("Bye!")
                 break
 
             print(f"\n[GRAPH] 开始执行工作流...")
@@ -550,7 +538,7 @@ def main():
             conversation_history.append({"role": "assistant", "content": answer})
 
             print(f"\n[GRAPH] 完成 | 检索 {doc_count} 条 | 工具 {tool_count} 次")
-            print(f"\n🤖 OfferClaw: {answer}")
+            print(f"\n[BOT] OfferClaw: {answer}")
 
 
 if __name__ == "__main__":
