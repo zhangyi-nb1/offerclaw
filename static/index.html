@@ -262,15 +262,35 @@ async function doPlan(useGeneric){
   if(!useGeneric && !gaps){
     if(!confirm('③ 缺口卡还没数据，要不要按"通用方向"生成？')) return;
   }
-  body.innerHTML='规划生成中（约 15-30 秒，调 LLM）...';
-  st.className='status s-warn';st.textContent='运行中';
+  body.innerHTML='<pre id="planStream" style="max-height:380px;overflow:auto;white-space:pre-wrap"></pre>';
+  const streamEl=document.getElementById('planStream');
+  st.className='status s-warn';st.textContent='LLM 生成中...';
   try{
-    const r=await fetch('/api/plan',{method:'POST',
+    const r=await fetch('/api/plan/stream',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({gaps:gaps})});
     if(!r.ok){const t=await r.text();throw new Error('HTTP '+r.status+' '+t);}
-    const d=await r.json();
-    body.innerHTML=`<p style="color:#888;font-size:12px">已写入：${escapeHtml(d.saved_path||'—')}</p>
-                    <pre style="margin-top:8px">${escapeHtml(d.plan_md||'')}</pre>`;
+    const reader=r.body.getReader();
+    const dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const {done,value}=await reader.read();
+      if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');
+      buf=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data: ')) continue;
+        const data=line.slice(6);
+        try{
+          const c=JSON.parse(data);
+          if(c.text){streamEl.textContent+=c.text;streamEl.scrollTop=streamEl.scrollHeight;}
+          else if(c.done){
+            body.innerHTML=`<p style="color:#888;font-size:12px">已写入：${escapeHtml(c.saved_path||'—')}</p>`+body.innerHTML;
+            st.className='status s-ok';st.textContent='已生成';return;
+          }else if(c.error){throw new Error(c.error);}
+        }catch(e){if(e.message!=='Unexpected end of JSON input') throw e;}
+      }
+    }
     st.className='status s-ok';st.textContent='已生成';
   }catch(e){body.innerHTML=`<div style="color:#c5221f">规划失败：${e.message}</div>`;
     st.className='status s-err';st.textContent='失败';}
@@ -325,21 +345,35 @@ async function loadResume(){
     st.className='status s-err';st.textContent='失败';}
 }
 
-// V2 阶段五：针对 ②JD 调 LLM 生成定制项目段
+// V2 阶段五：针对 ②JD 调 LLM 生成定制项目段（流式 SSE）
 async function buildResumeForJD(){
   const jd=document.getElementById('jdInput').value.trim();
   if(!jd){alert('请先在 ② 卡片粘 JD 或点"从 URL 抽取"');return;}
   const body=document.getElementById('resumeBody');
   const st=document.getElementById('resumeStatus');
-  st.className='status s-warn';st.textContent='LLM 生成中（15-30 秒）';
-  body.innerHTML='⏳ 正在调智谱 LLM 针对此 JD 重排项目段，请稍候...';
+  st.className='status s-warn';st.textContent='LLM 生成中...';
+  body.innerHTML='<p><b>🎯 JD 定制项目段（流式输出）</b></p><pre id="resumeStream" style="max-height:420px;overflow:auto;white-space:pre-wrap"></pre>';
+  const streamEl=document.getElementById('resumeStream');
   try{
-    const r=await fetch('/api/resume/build',{method:'POST',
+    const r=await fetch('/api/resume/build/stream',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({jd_text:jd})});
     if(!r.ok) throw new Error('HTTP '+r.status+' '+(await r.text()));
-    const d=await r.json();
-    body.innerHTML=`<p><b>🎯 JD 定制项目段（LLM 生成）</b> · JD 字符数 ${d.jd_summary_chars}</p>
-                    <pre style="max-height:420px;overflow:auto;white-space:pre-wrap">${escapeHtml(d.resume_md||'')}</pre>`;
+    const reader=r.body.getReader();
+    const dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const {done,value}=await reader.read();
+      if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');
+      buf=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data: ')) continue;
+        const data=line.slice(6);
+        if(data==='[DONE]'){st.className='status s-ok';st.textContent='已生成';return;}
+        try{const c=JSON.parse(data);if(c.text) streamEl.textContent+=c.text;}catch(e){}
+      }
+    }
     st.className='status s-ok';st.textContent='已生成';
   }catch(e){body.innerHTML=`<div style="color:#c5221f">生成失败：${e.message}</div>`;
     st.className='status s-err';st.textContent='失败';}

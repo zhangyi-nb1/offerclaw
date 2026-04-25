@@ -116,6 +116,42 @@ def call_llm_plain(messages, api_key, max_tokens: int = 4000) -> str:
     return data["choices"][0]["message"].get("content", "") or ""
 
 
+def call_llm_stream(messages, api_key, max_tokens: int = 4000):
+    """调用智谱 LLM，stream=True，逐 token yield str。供 SSE 端点消费。"""
+    import json as _json
+    bearer = build_zhipu_jwt(api_key)
+    url = f"{API_BASE}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {bearer}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": MODEL,
+        "messages": messages,
+        "temperature": 0.3,
+        "max_tokens": max_tokens,
+        "stream": True,
+    }
+    with requests.post(url, headers=headers, json=payload, timeout=120, stream=True) as resp:
+        resp.raise_for_status()
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            if isinstance(line, bytes):
+                line = line.decode("utf-8", "replace")
+            if line.startswith("data: "):
+                data = line[6:]
+                if data.strip() == "[DONE]":
+                    return
+                try:
+                    chunk = _json.loads(data)
+                    delta = chunk["choices"][0]["delta"].get("content", "")
+                    if delta:
+                        yield delta
+                except Exception:
+                    pass
+
+
 def save_plan(content: str) -> str:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

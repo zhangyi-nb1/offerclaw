@@ -365,6 +365,7 @@ async def job_match(req: MatchRequest):
 @app.post("/api/plan", response_model=PlanResponse)
 async def gen_plan(req: PlanRequest):
     """基于缺口清单生成 4 周路线规划。无缺口时用 DATA_CONTRACT.md 风格的兜底输入。"""
+    import asyncio
     try:
         from plan_gen import (
             read_text, build_messages, call_llm_plain, save_plan,
@@ -383,7 +384,10 @@ async def gen_plan(req: PlanRequest):
             target_rules=read_text(TARGET_RULES_PATH),
             gaps=gaps,
         )
-        plan_md = call_llm_plain(messages, api_key, max_tokens=3500)
+        loop = asyncio.get_event_loop()
+        plan_md = await loop.run_in_executor(
+            None, lambda: call_llm_plain(messages, api_key, max_tokens=3500)
+        )
         path = save_plan(plan_md)
         return PlanResponse(plan_md=plan_md, saved_path=path)
     except HTTPException:
@@ -494,19 +498,122 @@ async def discover(req: DiscoverRequest):
 @app.post("/api/resume/build", response_model=ResumeBuildResponse)
 async def build_resume(req: ResumeBuildRequest):
     """V2 阶段五：针对一份 JD 生成 OfferClaw 项目段（bullet + 段落 + 命中分析）。"""
+    import asyncio
     try:
         from resume_builder import build_resume_for_jd
         meta = []
         if req.company: meta.append(f"公司：{req.company}")
         if req.title: meta.append(f"岗位：{req.title}")
         meta.append("JD 原文：\n" + req.jd_text[:4000])
-        out = build_resume_for_jd("\n".join(meta))
+        jd_summary = "\n".join(meta)
+        loop = asyncio.get_event_loop()
+        out = await loop.run_in_executor(None, lambda: build_resume_for_jd(jd_summary))
         return ResumeBuildResponse(**out)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         _log.exception("resume build failed")
         raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
+
+
+@app.post("/api/resume/build/stream")
+async def build_resume_stream(req: ResumeBuildRequest):
+    """流式版简历生成：SSE 逐 token 返回，首 token 约 1s 内到达。"""
+    import asyncio, json as _json
+    api_key = os.getenv("ZHIPU_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置")
+    from resume_builder import build_messages as _bm, _read
+    from plan_gen import call_llm_stream
+    meta = []
+    if req.company: meta.append(f"公司：{req.company}")
+    if req.title: meta.append(f"岗位：{req.title}")
+    meta.append("JD 原文：\n" + req.jd_text[:4000])
+    messages = _bm(jd_summary="\n".join(meta),
+                   profile=_read(os.path.join(BASE_DIR, "user_profile.md")))
+
+    async def generate():
+        loop = asyncio.get_event_loop()
+        q: asyncio.Queue = asyncio.Queue()
+
+        def _producer():
+            try:
+                for tok in call_llm_stream(messages, api_key, max_tokens=2000):
+                    loop.call_soon_threadsafe(q.put_nowait, tok)
+            except Exception as exc:
+                loop.call_soon_threadsafe(q.put_nowait, f"\n\n[生成错误: {exc}]")
+            finally:
+                loop.call_soon_threadsafe(q.put_nowait, None)
+
+        loop.run_in_executor(None, _producer)
+        while True:
+            tok = await q.get()
+            if tok is None:
+                yield "data: [DONE]\n\n"
+                break
+            yield f"data: {_json.dumps({'text': tok}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/plan/stream")
+async def gen_plan_stream(req: PlanRequest):
+    """流式版规划生成：SSE 逐 token 返回。"""
+    import asyncio, json as _json
+    api_key = os.getenv("ZHIPU_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置")
+    from plan_gen import (
+        read_text, build_messages, call_llm_stream, save_plan,
+        PROFILE_PATH, PLAN_PROMPT_PATH, DAILY_LOG_PATH,
+        SOURCE_POLICY_PATH, TARGET_RULES_PATH,
+    )
+    gaps = (req.gaps or "").strip() or "（前端未提供缺口清单，按用户画像通用方向规划）"
+    messages = build_messages(
+        profile=read_text(PROFILE_PATH),
+        plan_prompt=read_text(PLAN_PROMPT_PATH),
+        daily_log=read_text(DAILY_LOG_PATH),
+        source_policy=read_text(SOURCE_POLICY_PATH),
+        target_rules=read_text(TARGET_RULES_PATH),
+        gaps=gaps,
+    )
+
+    async def generate():
+        loop = asyncio.get_event_loop()
+        q: asyncio.Queue = asyncio.Queue()
+        full_text = []
+
+        def _producer():
+            try:
+                for tok in call_llm_stream(messages, api_key, max_tokens=3500):
+                    full_text.append(tok)
+                    loop.call_soon_threadsafe(q.put_nowait, ("tok", tok))
+                # 流结束后落盘
+                plan_md = "".join(full_text)
+                path = save_plan(plan_md)
+                loop.call_soon_threadsafe(q.put_nowait, ("done", path))
+            except Exception as exc:
+                loop.call_soon_threadsafe(q.put_nowait, ("err", str(exc)))
+
+        loop.run_in_executor(None, _producer)
+        while True:
+            kind, val = await q.get()
+            if kind == "tok":
+                yield f"data: {_json.dumps({'text': val}, ensure_ascii=False)}\n\n"
+            elif kind == "done":
+                yield f"data: {_json.dumps({'done': True, 'saved_path': val}, ensure_ascii=False)}\n\n"
+                break
+            else:
+                yield f"data: {_json.dumps({'error': val}, ensure_ascii=False)}\n\n"
+                break
+
+    return StreamingResponse(
+        generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/stream")
