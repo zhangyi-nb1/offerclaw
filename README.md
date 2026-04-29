@@ -204,8 +204,10 @@ offerclaw/
 ## Limitations
 
 - **不自动投递**：不会代为提交简历到任何平台。投递动作必须人工完成。
+- **JD 抓取仅半自动 · 不批量 · 不登录**：`job_discovery.py` 一次只处理用户给定的单个 URL；Playwright 只做 SPA 渲染兜底，不做门户扫描 / 翻页 / 列表遍历；不登录任何招聘平台、不绕验证码。详见 [`docs/ethical_use.md`](docs/ethical_use.md) §1.6。
 - **不伪造经历**：简历草稿仅基于 `user_profile.md` 与 `interview_story_bank.md` 中的真实素材重组、强调和适配 JD，不会编造未发生的项目。
 - **不承诺录用概率**：所有匹配结论是"差距分析 + 建议"，不输出录用率、面试通过率之类的数字预测。
+- **写入需人工确认**：写入 `applications.md` / `user_profile.md` 等用户层文件的关键动作必须 UI 二次确认，Agent 不静默落库（详见 [`DATA_CONTRACT.md`](DATA_CONTRACT.md) §4.0 写入策略表）。
 - **个人作品集，非生产系统**：单用户运行、本地存储、无多租户、无登录鉴权 / 限流 / 审计。
 - **指标规模小**：50 题评估集只覆盖本仓库内的 Prompt / 画像 / JD 等内容，结论不推广到通用领域。
 - **LLM 输出不可强保证**：尽管走 Prompt 契约，仍可能产生不符合规则的回答，需人工二次确认。

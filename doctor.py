@@ -120,12 +120,36 @@ def check_gitignore() -> None:
         ok(".gitignore 关键规则齐全")
 
 
+def check_docs_consistency() -> None:
+    """新增：调用 verify_docs.py 巡检 README/verification_report/project_one_pager/PROJECT_STATUS 指标口径"""
+    script = ROOT / "verify_docs.py"
+    if not script.exists():
+        warn("verify_docs.py 缺失，跳过文档口径检查")
+        return
+    import subprocess
+    r = subprocess.run([sys.executable, str(script), "--json"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode == 0:
+        ok("文档指标口径一致（verify_docs 全绿）")
+    elif r.returncode == 1:
+        # 解析 JSON 拿 issue 数
+        try:
+            import json as _json
+            data = _json.loads(r.stdout)
+            n = len(data.get("issues", []))
+            err(f"verify_docs 发现 {n} 处指标口径不一致，跑 `python verify_docs.py` 查看")
+        except Exception:
+            err("verify_docs 报告不一致（详情运行 `python verify_docs.py`）")
+    else:
+        warn(f"verify_docs 异常退出 rc={r.returncode}")
+
+
 def main() -> int:
     print("=" * 60)
     print("OfferClaw doctor — 工程健康检查")
     print("=" * 60)
     for fn in [check_python, check_packages, check_env, check_core_files,
-               check_chroma, check_tests, check_gitignore]:
+               check_chroma, check_tests, check_gitignore, check_docs_consistency]:
         try:
             fn()
         except Exception as e:

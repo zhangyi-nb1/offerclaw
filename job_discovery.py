@@ -151,14 +151,54 @@ def fetch_url(url: str, timeout: int = 20) -> str:
         )
 
 
+def _classify_source(url: str, raw: str) -> tuple[str, str]:
+    """根据 URL 域名判断来源类型与可信度（A/B/C，与 source_policy.md 对齐）。
+
+    Returns:
+        (source_type, source_credibility)
+        source_type ∈ {"official", "platform", "manual_paste", "unknown"}
+        source_credibility ∈ {"A", "B", "C"}
+    """
+    if not url and raw:
+        return "manual_paste", "B"
+    u = (url or "").lower()
+    # A 级：公司官网 / 官方招聘门户
+    official_domains = ("jobs.bytedance.com", "talent.alibaba.com", "careers.tencent.com",
+                        "campus.baidu.com", "nio.jobs.feishu.cn", "join.jd.com",
+                        "career.huawei.com", "jobs.netease.com", "jobs.didiglobal.com",
+                        "campus.meituan.com", "talent.kuaishou.com", "careers.bilibili.com",
+                        ".feishu.cn/", "/careers", "/jobs/")
+    for d in official_domains:
+        if d in u:
+            return "official", "A"
+    # B 级：第三方招聘平台
+    platform_domains = ("zhipin.com", "lagou.com", "linkedin.com", "liepin.com",
+                        "51job.com", "zhaopin.com", "maimai.cn", "greenhouse.io",
+                        "lever.co", "ashbyhq.com", "workable.com")
+    for d in platform_domains:
+        if d in u:
+            return "platform", "B"
+    return "unknown", "C"
+
+
 def discover(raw: str = "", url: str = "") -> Dict[str, object]:
-    """统一入口：raw 优先，否则 fetch_url(url)。返回结构化 JD。"""
+    """统一入口：raw 优先，否则 fetch_url(url)。返回结构化 JD。
+
+    输出新增字段：
+        source_type: official / platform / manual_paste / unknown
+        source_credibility: A (官网) / B (招聘平台) / C (未知/匿名)
+        notice: 不登录、不批量抓取、不自动投递 — 见 docs/ethical_use.md
+    """
     if not raw and not url:
         raise ValueError("raw 与 url 至少给一个")
     text = raw or fetch_url(url)
     parsed = extract_jd(text)
     parsed["source_url"] = url
     parsed["jd_text"] = text  # 透传给前端，方便直接喂给 /api/match
+    src_type, src_cred = _classify_source(url, raw)
+    parsed["source_type"] = src_type
+    parsed["source_credibility"] = src_cred
+    parsed["notice"] = "OfferClaw 仅做半自动抽取：不登录、不批量、不自动投递。最终录入 applications.md 需用户确认。"
     return parsed
 
 

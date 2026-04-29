@@ -84,4 +84,22 @@ Python 3.13 · FastAPI · LangGraph · ChromaDB · 智谱 GLM-4 / embedding-3 ·
 
 ---
 
+## 11. Portfolio Signal（项目作为求职作品集的信号强度）
+
+> 参照 Career-Ops `modes/project.md` 的 6 维评估标准自评，用于面试和简历附录引用。
+
+| 维度 | 评分 | 说明 |
+|---|---|---|
+| **Target-role signal** | ⭐⭐⭐⭐⭐ | 直接面向 AI 应用 / Agent / RAG / FastAPI / LangGraph 实习岗，技术栈与岗位 JD 高度对齐 |
+| **Uniqueness** | ⭐⭐⭐⭐ | 把"求职过程"本身做成 Agent 系统（画像→匹配→缺口→规划→执行→复盘），区别于纯 RAG demo 或纯简历工具 |
+| **Demo-ability** | ⭐⭐⭐⭐⭐ | 本地 `/ui` 6 卡片控制台 + 顶部 RAG 问答条 + 今日建议横条，2 分钟可完整演示一遍 |
+| **Metrics** | ⭐⭐⭐⭐ | RAG Recall@5=0.96 · cross_doc=1.00 · MRR=0.67 · pytest 37/37 · doctor 9 OK · verify_pipeline 6/6 · 多 Persona 回归（自评：评估集 50 题为小规模，扣 1 星） |
+| **MVP time** | ⭐⭐⭐⭐ | 6-8 周从 Agent Demo → V2 控制台，节奏可追溯（PROJECT_STATUS.md 9 批次推进记录） |
+| **STAR potential** | ⭐⭐⭐⭐⭐ | `interview_story_bank.md` 已沉淀 8 条 STAR+R 故事，每条绑定技术主题 + 可回答问题 + 相关文件 |
+
+> **总信号**：5 / 6 维 ≥ 4 星 —— 项目已达到"可直接放进简历首屏 + 面试主项目"水平。
+> **可演示路径**：`docs/demo_script.md` · **可复现路径**：`docs/verification_report.md` · **可讲故事路径**：`interview_story_bank.md`
+
+---
+
 GitHub: https://github.com/zhangyi-nb1/offerclaw
