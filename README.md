@@ -63,8 +63,10 @@ python -m uvicorn rag_api:app --host 127.0.0.1 --port 8000
 工程自检 / 端到端冒烟：
 
 ```bash
-python doctor.py            # 9 项环境与文件健康检查
+python doctor.py            # 10 项环境与文件健康检查（含文档口径巡检）
 python verify_pipeline.py   # 6 步主链路验证
+python verify_docs.py       # 4 份文档关键指标口径一致性巡检
+python normalize_applications.py  # applications.md 投递表 schema 校验
 ```
 
 JVS Claw 部署见 [`deployment.md`](deployment.md)。
@@ -115,7 +117,7 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 4. **流式响应**：计划生成与简历草稿走 Server-Sent Events，首字延迟 < 2s。
 5. **主动 Orchestrator**：`career_agent.py` 跨模块读 profile / log / 投递记录，输出"今日最该做什么"。
 6. **可解释**：所有 JD 缺口带 `[致命度]` / `[短期性]` 元数据；复盘带"偏离度判断"。
-7. **多 Persona 回归**：`profiles/p*.json` 参数化 3 份用户画像，同一 JD 给出明显差异化结论，证明非单用户硬编码。
+8. **可治理**：`DATA_CONTRACT.md` §4.0 写入策略表明确每个文件的"可读 / 可写 / 自动写 / 需确认 / 入 Git"四列约束；JD 抓取按 `source_policy.md` 标注 `source_credibility` A/B/C 与 `notice` 字段；所有指标口径走 `verify_docs.py` 自动巡检防漂移。
 
 ---
 
@@ -129,7 +131,7 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 | **Orchestration** | LangGraph 声明式 StateGraph（4 节点 + 条件边）· `career_agent.py` 跨模块状态聚合 |
 | **JD 抓取** | `requests` 快速通道 + Playwright Headless Chromium 兜底（覆盖字节 / 阿里 / 腾讯等 SPA 招聘页） |
 | **State** | Markdown 文件 + `memory.json` 跨会话上下文 + `profiles/p*.json` 多 Persona |
-| **Testing** | pytest · `tests/rag_eval_set.json`（自建 50 题 3 桶）· `doctor.py`（9 项体检）· `verify_pipeline.py`（6 步冒烟） |
+| **Testing** | pytest · `tests/rag_eval_set.json`（自建 50 题 3 桶）· `doctor.py`（10 项体检）· `verify_pipeline.py`（6 步冒烟）· `verify_docs.py`（4 份文档指标口径巡检）· `normalize_applications.py`（投递表 schema 校验） |
 | **运行平台** | 本地 / JVS Claw（文件空间 + 定时任务） |
 
 ---
@@ -146,7 +148,10 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 | FastAPI 路由数 | **19** | 13 核心业务 + 6 辅助/系统，含 2 条 SSE |
 | ChromaDB 知识库 | **160 chunks** | 覆盖 8 类 source_type |
 | pytest | **37 / 37** | 另有 3 个 e2e 默认跳过，需 `OFFERCLAW_E2E=1` |
-| 工程体检 | **doctor 9 OK** | 见 `python doctor.py` |
+| 工程体检 | **doctor 10 OK** | 见 `python doctor.py`（含文档口径巡检 `verify_docs.py` 集成项） |
+| 文档口径巡检 | **all green** | `python verify_docs.py` —— 4 份关键文档（README / verification_report / project_one_pager / PROJECT_STATUS）的 7 类指标自动比对 |
+| 投递表校验 | **0 error** | `python normalize_applications.py` —— `applications.md` 字段 / 状态枚举 / 日期格式 / 公司+岗位去重 |
+| 面试故事库 | **8 STAR+R** | [`interview_story_bank.md`](interview_story_bank.md) —— 8 条结构化故事 + 主题索引 + 反思标签，覆盖 RAG / Agent / FastAPI / Playwright / 多 Persona 等 |
 | 端到端链路 | **verify_pipeline 6 / 6** | 见 `python verify_pipeline.py` |
 | SSE 首字延迟 | **< 2s** | 计划与简历流 |
 | 多 Persona 回归 | **3 persona × multi-JD 差异化** | 报告：[`docs/persona_compare_report.md`](docs/persona_compare_report.md) |
@@ -223,7 +228,7 @@ offerclaw/
 - [ ] 1 分钟 Demo 视频（可选）
 - [ ] RAG 评估集扩到 100 题（可选）
 
-详细推进记录见 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)。
+完整推进记录见 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)。作品集自评（6 维 Portfolio Signal）见 [`docs/project_one_pager.md`](docs/project_one_pager.md) §11。
 
 ---
 

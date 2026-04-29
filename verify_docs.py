@@ -69,7 +69,7 @@ EXPECTED = {
     "cross_doc": "1.00",
     "chunks": "160",
     "routes": "19",
-    "doctor_ok": "9",
+    "doctor_ok": "10",
 }
 
 
