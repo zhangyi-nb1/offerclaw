@@ -66,7 +66,13 @@ def validate(rows: list[dict]) -> list[dict]:
     issues: list[dict] = []
     seen: dict[tuple, int] = {}
     for idx, row in enumerate(rows, start=1):
-        # 跳过仍是 demo 占位行
+        company = row.get("公司", "") or ""
+        # [DEMO] 行 → 标 INFO 跳过其他校验（仅证明字段约束可演示，不计 warn）
+        if company.lstrip().startswith("[DEMO]"):
+            issues.append({"row": idx, "level": "info",
+                           "msg": f"DEMO row (示例数据 · 非真实投递): {company}"})
+            continue
+        # 跳过仍是 demo 占位行（旧式 *（待填...)*）
         if any("（待填" in (row.get(f) or "") for f in row):
             issues.append({"row": idx, "level": "warn",
                            "msg": "row contains placeholder '（待填...)' — fill or remove"})
@@ -102,14 +108,15 @@ def render_text(rows: list[dict], issues: list[dict]) -> str:
     out.append(f"- rows scanned: **{len(rows)}**")
     errs = [i for i in issues if i["level"] == "error"]
     warns = [i for i in issues if i["level"] == "warn"]
-    out.append(f"- errors: **{len(errs)}** · warnings: **{len(warns)}**")
+    infos = [i for i in issues if i["level"] == "info"]
+    out.append(f"- errors: **{len(errs)}** · warnings: **{len(warns)}** · info(DEMO): **{len(infos)}**")
     out.append("")
     if not issues:
         out.append("## ✅ 0 violations — applications tracker is clean.")
         return "\n".join(out)
     out.append("## Findings")
     for it in issues:
-        marker = "❌" if it["level"] == "error" else "⚠️"
+        marker = {"error": "❌", "warn": "⚠️", "info": "ℹ️"}.get(it["level"], "·")
         out.append(f"- {marker} row {it['row']}: {it['msg']}")
     return "\n".join(out)
 

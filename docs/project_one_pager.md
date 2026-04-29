@@ -50,7 +50,7 @@ Python 3.13 · FastAPI · LangGraph · ChromaDB · 智谱 GLM-4 / embedding-3 ·
 | FastAPI 路由 | **19**（13 核心业务 + 6 辅助/系统，含 2 条 SSE 流式） |
 | Persona 回归 | 3 personas × multi-JD，结论差异化，见 `docs/persona_compare_report.md` |
 | 知识库 | **160 chunks**（8 类 source_type 元数据） |
-| 工程自检 | doctor **10 OK** · verify_pipeline 6/6 · verify_docs all green |
+| 工程自检 | doctor **10 OK**（注入 KEY 后；裸跑 9 OK · 1 WARN）· verify_pipeline 6/6 · verify_docs all green |
 | 端到端首字延迟 | < 2s（SSE 流式） |
 | Playwright SPA | 支持字节/阿里/腾讯等 SPA 招聘页自动渲染 |
 
@@ -93,7 +93,7 @@ Python 3.13 · FastAPI · LangGraph · ChromaDB · 智谱 GLM-4 / embedding-3 ·
 | **Target-role signal** | ⭐⭐⭐⭐⭐ | 直接面向 AI 应用 / Agent / RAG / FastAPI / LangGraph 实习岗，技术栈与岗位 JD 高度对齐 |
 | **Uniqueness** | ⭐⭐⭐⭐ | 把"求职过程"本身做成 Agent 系统（画像→匹配→缺口→规划→执行→复盘），区别于纯 RAG demo 或纯简历工具 |
 | **Demo-ability** | ⭐⭐⭐⭐⭐ | 本地 `/ui` 6 卡片控制台 + 顶部 RAG 问答条 + 今日建议横条，2 分钟可完整演示一遍 |
-| **Metrics** | ⭐⭐⭐⭐ | RAG Recall@5=0.96 · cross_doc=1.00 · MRR=0.67 · pytest 37/37 · doctor 10 OK · verify_pipeline 6/6 · verify_docs all green · 多 Persona 回归（自评：评估集 50 题为小规模，扣 1 星） |
+| **Metrics** | ⭐⭐⭐⭐ | RAG Recall@5=0.96 · cross_doc=1.00 · MRR=0.67 · pytest 37/37 · doctor 10 OK（注入 KEY 后；裸跑 9 OK · 1 WARN）· verify_pipeline 6/6 · verify_docs all green · 多 Persona 回归（自评：评估集 50 题为小规模，扣 1 星） |
 | **MVP time** | ⭐⭐⭐⭐ | 6-8 周从 Agent Demo → V2 控制台，节奏可追溯（PROJECT_STATUS.md 9 批次推进记录） |
 | **STAR potential** | ⭐⭐⭐⭐⭐ | `interview_story_bank.md` 已沉淀 8 条 STAR+R 故事，每条绑定技术主题 + 可回答问题 + 相关文件 |
 

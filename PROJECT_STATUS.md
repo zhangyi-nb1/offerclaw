@@ -27,7 +27,7 @@
 | JD 发现 | ✅ Playwright SPA 自动渲染 |
 | 简历生成 | ✅ SSE 流式 JD 定制项目段 |
 | 多 Persona 验证 | ✅ 3 persona × multi-JD 回归，见 docs/persona_compare_report.md |
-| 工程自检 | ✅ doctor 10 OK · verify_pipeline 6/6 · verify_docs all green |
+| 工程自检 | ✅ doctor 10 OK（注入 KEY 后；裸跑 9 OK · 1 WARN）· verify_pipeline 6/6 · verify_docs all green |
 
 **下一步**：简历最终 PDF/Word 版本；可选 Demo 视频；可选 RAG 评估集扩展到 100 题。
 - **GitHub 仓库**：https://github.com/zhangyi-nb1/offerclaw
@@ -354,7 +354,7 @@ __start__
 - [x] FastAPI 接口层（**19 路由** + Swagger UI + 2 条 SSE）
 - [x] LangGraph 工作流（4 节点 StateGraph）
 - [x] career_agent.py · job_discovery.py · resume_builder.py（V2 新增）
-- [x] doctor.py 10 OK · verify_pipeline.py 6/6 · verify_docs.py all green · normalize_applications.py 0 error
+- [x] doctor.py 10 OK（注入 KEY 后；裸跑 9 OK · 1 WARN）· verify_pipeline.py 6/6 · verify_docs.py all green · normalize_applications.py 0 error
 - [x] UI 控制台（6 卡片 + 今日建议横条）
 - [x] docs/resume_pitch.md V2 终版 + docs/demo_script.md 演示脚本
 - [x] docs/persona_compare_report.md 3 persona × multi-JD 回归验证

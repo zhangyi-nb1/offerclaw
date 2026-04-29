@@ -41,6 +41,7 @@ OfferClaw 的思路是用一个带状态的 Agent 把这条链路连起来：所
 
 - 1 分钟现场演示脚本：[`docs/demo_script.md`](docs/demo_script.md)
 - 现场可复现的证据链（doctor / pytest / RAG eval / `/health` / 一次完整查询）：[`docs/verification_report.md`](docs/verification_report.md)
+- 截图证据（6 张）：[`docs/screenshots/`](docs/screenshots/)（投递前补齐，命名规范见目录内 README）
 
 ---
 
@@ -60,9 +61,13 @@ python -m uvicorn rag_api:app --host 127.0.0.1 --port 8000
 
 打开 `http://127.0.0.1:8000/ui` 即可使用。Swagger 文档在 `/docs`。
 
-工程自检 / 端到端冒烟：
+工程自检 / 端到端冒烟（**先注入 KEY**，否则 doctor 会出 9 OK · 1 WARN）：
 
 ```bash
+# Windows PowerShell：$env:ZHIPU_API_KEY="你的密钥"
+# Linux/macOS：    export ZHIPU_API_KEY=你的密钥
+set ZHIPU_API_KEY=你的密钥
+
 python doctor.py            # 10 项环境与文件健康检查（含文档口径巡检）
 python verify_pipeline.py   # 6 步主链路验证
 python verify_docs.py       # 4 份文档关键指标口径一致性巡检
@@ -148,7 +153,7 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 | FastAPI 路由数 | **19** | 13 核心业务 + 6 辅助/系统，含 2 条 SSE |
 | ChromaDB 知识库 | **160 chunks** | 覆盖 8 类 source_type |
 | pytest | **37 / 37** | 另有 3 个 e2e 默认跳过，需 `OFFERCLAW_E2E=1` |
-| 工程体检 | **doctor 10 OK** | 见 `python doctor.py`（含文档口径巡检 `verify_docs.py` 集成项） |
+| 工程体检 | **doctor 10 OK**（注入 `ZHIPU_API_KEY` 后；裸跑 9 OK · 1 WARN 属正常） | 见 `python doctor.py`（含文档口径巡检 `verify_docs.py` 集成项） |
 | 文档口径巡检 | **all green** | `python verify_docs.py` —— 4 份关键文档（README / verification_report / project_one_pager / PROJECT_STATUS）的 7 类指标自动比对 |
 | 投递表校验 | **0 error** | `python normalize_applications.py` —— `applications.md` 字段 / 状态枚举 / 日期格式 / 公司+岗位去重 |
 | 面试故事库 | **8 STAR+R** | [`interview_story_bank.md`](interview_story_bank.md) —— 8 条结构化故事 + 主题索引 + 反思标签，覆盖 RAG / Agent / FastAPI / Playwright / 多 Persona 等 |
