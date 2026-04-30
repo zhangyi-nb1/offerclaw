@@ -39,6 +39,7 @@ def parse_applications(md: str) -> List[Dict[str, str]]:
     """从 applications.md 抓所有 markdown 表格行（投递记录）。
 
     只识别"日期 | 公司 | 岗位 | 来源 | ... | 当前状态 | 下一步动作 | ..."这种 9+ 列表行。
+    自动跳过 ``[DEMO]`` 行（示例数据），避免 ``today_advice`` 把 demo 投递顶到 headline。
     """
     rows: List[Dict[str, str]] = []
     headers: Optional[List[str]] = None
@@ -60,6 +61,9 @@ def parse_applications(md: str) -> List[Dict[str, str]]:
                 headers = cells
             continue
         if not in_table or not headers or len(cells) != len(headers):
+            continue
+        # 跳过 [DEMO] 示例行
+        if any("[DEMO]" in c for c in cells):
             continue
         rows.append(dict(zip(headers, cells)))
     return rows

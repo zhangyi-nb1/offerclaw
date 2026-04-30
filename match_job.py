@@ -152,6 +152,15 @@ def check_major(profile: dict, jd: str) -> CheckResult:
                     f"{user_major} 属于 AI 友好相关专业（profile §1 + JD '相关专业'）"
                 )
 
+    # JD 没明确专业要求 → 默认 AI 友好专业通过（避免对所有 AI/技术岗都报"信息不足"）
+    if not any(tag in jd for tag in ("专业", "Major", "学科")):
+        for m in AI_FRIENDLY_MAJORS:
+            if m in user_major:
+                return CheckResult(
+                    "专业", "✓",
+                    f"{user_major} 属于 AI 友好专业（JD 未限制专业，按相关专业默认通过）"
+                )
+
     return CheckResult(
         "专业", "?",
         f"JD 未明确是否接受 {user_major}"

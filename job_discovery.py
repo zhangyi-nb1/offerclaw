@@ -40,6 +40,41 @@ _SKILL_KEYWORDS = [
     "Kaggle","LeetCode","数据结构","算法",
 ]
 
+# Feishu Jobs / BOSS / 拉勾 等段落式 JD 的兜底：直接扫描城市名 / 工作性质
+_CITIES_FALLBACK = ["北京","上海","深圳","广州","杭州","成都","南京","武汉","西安","苏州","天津","重庆","厦门","合肥","宁波","青岛"]
+_JOB_TYPE_FALLBACK = ["实习","全职","校招","社招","兼职","劳务"]
+
+
+def _scan_first_city(text: str) -> str:
+    """Feishu Jobs 页眉常是「城市｜实习｜部门」或「上海社招实习」，纯文字段无键值。"""
+    head = text[:300]
+    for c in _CITIES_FALLBACK:
+        if c in head:
+            return c
+    return ""
+
+
+def _scan_first_job_type(text: str) -> str:
+    head = text[:300]
+    for t in _JOB_TYPE_FALLBACK:
+        if t in head:
+            return t
+    return ""
+
+
+def _guess_title_first_line(text: str) -> str:
+    """没有「岗位名称：」键值时，取第一非空行作为标题候选（限长 60，去括号噪声）。"""
+    for line in text.splitlines():
+        s = line.strip().lstrip("#").strip()
+        if not s or len(s) < 4:
+            continue
+        # 跳过明显非标题行（纯城市横线分隔头）
+        if all(p.strip() in _CITIES_FALLBACK + _JOB_TYPE_FALLBACK
+               for p in re.split(r"[｜|·\-\s]+", s) if p.strip()):
+            continue
+        return s[:60]
+    return ""
+
 
 def _first_match(pat: re.Pattern, text: str) -> str:
     m = pat.search(text)
@@ -53,6 +88,14 @@ def extract_jd(raw: str) -> Dict[str, object]:
     title = _first_match(_TITLE_HINT, raw)
     location = _first_match(_LOC_HINT, raw)
     job_type = _first_match(_TYPE_HINT, raw)
+
+    # Feishu Jobs / BOSS / 拉勾 段落式 JD 兜底
+    if not title:
+        title = _guess_title_first_line(raw)
+    if not location:
+        location = _scan_first_city(raw)
+    if not job_type:
+        job_type = _scan_first_job_type(raw)
 
     # 技能关键字命中
     hits: List[str] = []

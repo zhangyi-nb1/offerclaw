@@ -248,6 +248,7 @@ def application_suggest_node(state: CareerState) -> CareerState:
     state["application_suggestion"] = {
         "decision": suggest,
         "status": status,
+        "reason": patch["reason"],
         "patch": patch,
     }
     if "适合" in status:
