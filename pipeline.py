@@ -17,7 +17,8 @@ import datetime
 import os
 import sys
 
-from match_job import run_match, format_report, DEMO_PROFILE, DEMO_JD
+from match_job import run_match, format_report, DEMO_JD
+from profile_loader import load_profile
 from plan_gen import (
     PROFILE_PATH, PLAN_PROMPT_PATH, DAILY_LOG_PATH,
     SOURCE_POLICY_PATH, TARGET_RULES_PATH,
@@ -83,7 +84,8 @@ def main():
     print("[1/3] 运行岗位匹配...")
     print("=" * 60)
     jd_text = read_text(args.jd) if args.jd else DEMO_JD
-    report = run_match(DEMO_PROFILE, jd_text, jd_title=args.title)
+    profile = load_profile()
+    report = run_match(profile, jd_text, jd_title=args.title)
     print(format_report(report))
 
     # === Step 2: 计划 ===
