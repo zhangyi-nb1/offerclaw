@@ -348,8 +348,10 @@ async def job_match(req: MatchRequest):
     返回结构化 gap_list + suggestions，方便前端独立渲染缺口卡。
     """
     try:
-        from match_job import run_match, format_report, DEMO_PROFILE
-        report = run_match(DEMO_PROFILE, req.jd_text, jd_title="API 请求")
+        from match_job import run_match, format_report
+        from profile_loader import load_profile
+        profile = load_profile()
+        report = run_match(profile, req.jd_text, jd_title="API 请求")
         return MatchResponse(
             status=report.conclusion,
             summary=format_report(report),
