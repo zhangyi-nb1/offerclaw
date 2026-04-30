@@ -37,17 +37,24 @@ OfferClaw 的思路是用一个带状态的 Agent 把这条链路连起来：所
 
 ## Demo
 
-启动后浏览器打开 `http://127.0.0.1:8000/ui`：6 卡片控制台 + 顶部 RAG 问答条 + 今日建议横条，无需后台命令。
+启动后浏览器打开：
+
+- `http://127.0.0.1:8000/ui` — V2 6 卡片控制台（顶部 RAG 问答条 + 今日建议横条）
+- `http://127.0.0.1:8000/ui/console` — **V3 新增** CareerFlow 8 步 Stepper：粘贴 JD → 一键跑完 profile → match → gap → plan → today → resume → application_suggest
+
+参考材料：
 
 - 1 分钟现场演示脚本：[`docs/demo_script.md`](docs/demo_script.md)
+- V3 阶段 1-7 完整改进总结：[`docs/v3_changelog.md`](docs/v3_changelog.md)
 - 现场可复现的证据链（doctor / pytest / RAG eval / `/health` / 一次完整查询）：[`docs/verification_report.md`](docs/verification_report.md)
-- 截图证据（6 张已入库）：[`docs/screenshots/`](docs/screenshots/)
+- 截图证据（**7 张已入库**）：[`docs/screenshots/`](docs/screenshots/)
   - `01_doctor_all_green.png` — doctor 10 OK · 0 WARN · 0 ERR（KEY 自 `.env.local` 自动加载，掩码显示）
   - `02_verify_pipeline_all_green.png` — 端到端 6/6 步通过
-  - `03_pytest_37_passed.png` — `pytest -v` 37 passed · 3 skipped
+  - `03_pytest_37_passed.png` — `pytest -v` 37 passed · 3 skipped（V2 基线；V3 后实际 58 / 3）
   - `04_eval_rag_recall_0.96.png` — `eval_rag.py` overall Recall@5=0.960 / MRR=0.673
   - `05_ui_six_cards.png` — `/ui` 6 卡片控制台实拍（Playwright）
-  - `06_swagger_19_routes.png` — `/docs` Swagger 19 路由实拍（Playwright）
+  - `06_swagger_23_routes.png` — `/docs` Swagger 20 API + 4 系统/UI 入口实拍（V3 新增 4 路由）
+  - `07_ui_console_careerflow_stepper.png` — `/ui/console` CareerFlow 8 步 Stepper 全 done 实拍（蔚来 NIO 大模型应用开发实习）
 
 ---
 
@@ -138,7 +145,7 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 |---|---|
 | **Agent 核心** | Python 3.10+ · 智谱 GLM-4-Flash（OpenAI 兼容 function calling）· 仅 `requests`，无 LangChain / LlamaIndex |
 | **RAG** | 智谱 `embedding-3`（2048 维）· ChromaDB 本地持久化 · 自写分块（RecursiveCharacterTextSplitter）+ 9 类 source_type 元数据（profile / log / application / story / jd / resume / verification / system / doc） |
-| **API** | FastAPI + Uvicorn · **23 路由**（核心 + 辅助 + V3 新增 4 路：`/api/flow/run` · `/api/jd/queries` · `/api/jd/rank` · `/api/resume/markdown`）· Server-Sent Events 流式 · Swagger UI |
+| **API** | FastAPI + Uvicorn · **20 业务 API + 4 系统/UI 入口（Swagger 共 24）**· V3 新增 4 路：`/api/flow/run` · `/api/jd/queries` · `/api/jd/rank` · `/api/resume/markdown` + 1 页面 `/ui/console` · Server-Sent Events 流式 · Swagger UI |
 | **Orchestration** | LangGraph 声明式 StateGraph：RAG 4 节点 + **CareerFlow 8 节点**（V3 新增）· `career_agent.py` 跨模块状态聚合 |
 | **JD 抓取** | `requests` 快速通道 + Playwright Headless Chromium 兜底（覆盖字节 / 阿里 / 腾讯等 SPA 招聘页） |
 | **State** | Markdown 文件 + `memory.json` 跨会话上下文 + `profiles/p*.json` 多 Persona · **`profile_loader.py`** 集中 13 字段解析 + mtime 缓存 |
@@ -156,7 +163,7 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 | RAG Recall@5 | **0.96** | 50 题平均 |
 | RAG cross_doc Recall@5 | **1.00** | 跨文档子集 |
 | RAG MRR | **0.67** | 知识库扩到 160 chunks 后较 118 chunks 时的 0.74 略降，召回率上升换来排序难度 |
-| FastAPI 路由数 | **23** | V3 新增 4 路：`/api/flow/run` · `/api/jd/queries` · `/api/jd/rank` · `/api/resume/markdown` + `/ui/console` |
+| FastAPI 路由数 | **24**（Swagger 显示）= 20 业务 API + 4 系统/UI | V3 新增 4 API：`/api/flow/run` · `/api/jd/queries` · `/api/jd/rank` · `/api/resume/markdown` + 1 页面 `/ui/console` |
 | ChromaDB 知识库 | **160 chunks** | 覆盖 9 类 source_type（含 V3 新增 `verification`） |
 | pytest | **58 / 58** | 另有 3 个 e2e 默认跳过，需 `OFFERCLAW_E2E=1`；新增 `test_career_flow.py`(5) + `test_phase3_to_7.py`(9) + `test_profile_loader.py`(7) |
 | 工程体检 | **doctor 10 OK**（doctor.py 自动从 `.env.local` 加载 `ZHIPU_API_KEY`，KEY 仅本地、不入 git；显示用 `xxx***xxx` 掩码） | 见 `python doctor.py`（含文档口径巡检 `verify_docs.py` 集成项） |
@@ -235,6 +242,8 @@ offerclaw/
 - [x] V1：画像 / 匹配 / 规划 / 执行 / 复盘五段 + Agent Demo
 - [x] V1.5：RAG（LangGraph + ChromaDB）+ FastAPI 接口层
 - [x] V2：6 卡片控制台 + Orchestrator + JD 自动抓取 + JD 定制简历 + 多 Persona 回归 + 工程自检
+- [x] **V3 阶段 1-7（产品级 Agent 化）**：状态真实化（`profile_loader.py`，去 `DEMO_PROFILE`） · CareerFlow 8 节点编排（`career_flow.py` + `/api/flow/run`） · `/ui/console` Stepper · JD 排序（`/api/jd/queries` + `/api/jd/rank`） · Markdown 简历草稿（`/api/resume/markdown`，无 LLM 也能跑） · RAG 加 `verification` source_type · 4 核心问题端到端验证 — 详见 [`docs/v3_changelog.md`](docs/v3_changelog.md)
+- [ ] 真实投递场景验证（≥ 1 次实投 + 数据回流）
 - [ ] 简历最终可投递版本（Word / PDF）
 - [ ] 1 分钟 Demo 视频（可选）
 - [ ] RAG 评估集扩到 100 题（可选）
