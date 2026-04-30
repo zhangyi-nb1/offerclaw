@@ -24,12 +24,20 @@ _TITLE_HINT = re.compile(r"(?:岗位名称|职位名称|职位|岗位)[：: ]+([
 _COMPANY_HINT = re.compile(r"(?:公司|公司名称|招聘公司|Company)[：: ]+([^\n，,；;]+)")
 
 _SKILL_KEYWORDS = [
+    # 编程语言
     "Python","Java","Go","Rust","TypeScript","JavaScript","C++","SQL",
+    # Agent / RAG / LLM 框架
     "RAG","LangGraph","LangChain","LlamaIndex","FastAPI","Flask",
     "PyTorch","TensorFlow","Transformer","Embedding","LoRA","Prompt",
-    "MCP","Agent","Vector","Chroma","Milvus","Faiss","HuggingFace",
+    "MCP","Agent","Coding Agent","AI Agent","Vector","Chroma","Milvus","Faiss","HuggingFace",
+    # 后训练 / 强化学习（Coding Agent / 科研类岗位高频）
+    "LLM","RLHF","PPO","DPO","SFT","RL","Fine-tuning","微调","强化学习","指令微调",
+    "代码生成","工具调用","多步推理","Function Calling","Tool Use",
+    # 工程 / 基建
     "Docker","Kubernetes","Linux","Git","CI/CD","AWS","Azure",
     "MySQL","PostgreSQL","Redis","Kafka","MongoDB",
+    # 算法基础 / 竞赛背景
+    "Kaggle","LeetCode","数据结构","算法",
 ]
 
 

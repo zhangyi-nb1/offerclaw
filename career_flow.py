@@ -171,10 +171,25 @@ def plan_node(state: CareerState) -> CareerState:
 
 
 def today_node(state: CareerState) -> CareerState:
-    """复用 career_agent.get_today_advice。它已经读真实 applications + daily_log。"""
+    """复用 career_agent.get_today_advice，再叠加"本次 JD 是否优先今天处理"。
+
+    设计：如果本次 CareerFlow 跑出来的 match_report.status 含"适合"，
+    则把本次 JD 顶到 headline，避免 Stepper 上"今天该做什么"与本次 JD 无关。
+    """
     try:
         from career_agent import get_today_advice
         adv = get_today_advice()
+        report = state.get("match_report") or {}
+        jd_title = state.get("jd_title", "")
+        if jd_title and "适合" in (report.get("status") or ""):
+            adv = dict(adv)
+            adv["headline"] = f"【本次 JD · {jd_title}】结论={report.get('status')}，建议今天定稿简历并投出"
+            adv["next_action"] = (
+                f"1) 按缺口清单做最后补强（{state.get('gaps', {}).get('total', 0)} 项）；"
+                f"2) 在 /ui/console 确认 patch，写回 applications.md；"
+                f"3) 复用 /api/resume/markdown 出一版 JD 定制简历草稿。"
+            )
+            adv["source"] = "career_flow.today_node (this-JD override)"
         state["today_advice"] = adv
         _trace(state, "today", adv.get("headline", "")[:60],
                source=adv.get("source", "career_agent"))
@@ -250,6 +265,9 @@ _KEYWORDS = [
     "embedding", "chromadb", "prompt", "llm", "llamaindex", "mcp",
     "pytorch", "tensorflow", "sql", "mysql", "redis", "docker",
     "matlab", "deep learning", "nlp", "transformer",
+    "rlhf", "ppo", "dpo", "sft", "fine-tuning", "微调", "强化学习",
+    "coding agent", "代码生成", "工具调用", "多步推理",
+    "kaggle", "leetcode", "算法", "数据结构",
 ]
 
 
