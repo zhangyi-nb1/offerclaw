@@ -4,7 +4,7 @@
 
 | # | 文件名 | 内容 | 截图前置 |
 |---|---|---|---|
-| 01 | `01_doctor_all_green.png` | 终端 `python doctor.py` 输出 **10 OK · 0 WARN · 0 ERR** | 先注入 `ZHIPU_API_KEY` |
+| 01 | `01_doctor_all_green.png` | 终端 `python doctor.py` 输出 **10 OK · 0 WARN · 0 ERR** | 无需手动 set——doctor.py 会自动读 `.env.local`（已 `.gitignore`） |
 | 02 | `02_verify_pipeline_all_green.png` | `python verify_pipeline.py` **6/6** 通过 | rag_api 已启 8000 |
 | 03 | `03_pytest_37_passed.png` | `pytest -v` **37 passed, 3 skipped** | 无 |
 | 04 | `04_eval_rag_recall_0.96.png` | `python eval_rag.py` overall 表（Recall=0.960 / MRR=0.673） | 无 |

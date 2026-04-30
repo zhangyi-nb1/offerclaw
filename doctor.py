@@ -22,6 +22,34 @@ ROOT = Path(__file__).parent
 results: list[tuple[str, str]] = []  # (level, msg)
 
 
+def _load_env_local() -> bool:
+    """从 .env.local 读 KEY 注入到当前进程 env。
+    - 仅当当前进程未注入时才读
+    - 不打印 KEY 内容（只回报 是 / 否 加载成功）
+    - .env.local 已被 .gitignore（.env.* 规则）排除，不入 git
+    返回 True 表示本次成功补注入。
+    """
+    env_local = ROOT / ".env.local"
+    if not env_local.exists():
+        return False
+    injected = False
+    for raw in env_local.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        k = k.strip()
+        v = v.strip().strip('"').strip("'")
+        if k and v and not os.environ.get(k):
+            os.environ[k] = v
+            if k == "ZHIPU_API_KEY":
+                injected = True
+    return injected
+
+
+_load_env_local()
+
+
 def ok(msg: str) -> None: results.append(("OK", msg))
 def warn(msg: str) -> None: results.append(("WARN", msg))
 def err(msg: str) -> None: results.append(("ERR", msg))
@@ -50,8 +78,8 @@ def check_packages() -> None:
 def check_env() -> None:
     env_local = ROOT / ".env.local"
     if env_local.exists():
-        ok(".env.local 存在")
-        # 不读内容，仅看是否含 ZHIPU_API_KEY 行
+        ok(".env.local 存在（已被 .gitignore 排除，不入 git）")
+        # 不读 / 不打印 KEY 值，仅判定字段存在
         content = env_local.read_text(encoding="utf-8", errors="replace")
         if "ZHIPU_API_KEY" in content:
             ok(".env.local 含 ZHIPU_API_KEY 字段")
@@ -60,7 +88,10 @@ def check_env() -> None:
     else:
         warn(".env.local 不存在（运行时需手动 export ZHIPU_API_KEY）")
     if os.environ.get("ZHIPU_API_KEY"):
-        ok("环境变量 ZHIPU_API_KEY 已注入")
+        # 不打印 KEY，仅打印长度与前后掩码片段，证明确实存在
+        v = os.environ["ZHIPU_API_KEY"]
+        masked = f"{v[:3]}***{v[-3:]} · len={len(v)}" if len(v) >= 8 else "***"
+        ok(f"ZHIPU_API_KEY 已注入当前进程（{masked}）")
     else:
         warn("当前进程未注入 ZHIPU_API_KEY（前端 / RAG 调用会失败）")
 

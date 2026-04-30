@@ -16,7 +16,7 @@
 | OS | Windows |
 | 是否走真实 API | ✅ 是（智谱 GLM-4-Flash + embedding-3） |
 
-> **doctor 口径**：注入 `ZHIPU_API_KEY` 后期望 **10 OK · 0 WARN · 0 ERR**；裸跑（未注入密钥）为 **9 OK · 1 WARN · 0 ERR** —— 唯一 WARN 是密钥注入提示，不影响功能。
+> **doctor 口径**：`doctor.py` 启动时自动从 `.env.local` 注入 `ZHIPU_API_KEY` 到当前进程（`.env.local` 已被 `.gitignore` 的 `.env.*` 规则排除，不入 git；KEY 在终端输出仅显示 `xxx***xxx · len=N` 掩码）。期望 **10 OK · 0 WARN · 0 ERR**。如 `.env.local` 缺失才会回落到 9 OK · 1 WARN。
 
 **复现命令**（环境变量 `PYTHONIOENCODING=utf-8` 避免中文乱码）：
 ```bash
