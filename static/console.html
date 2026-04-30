@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OfferClaw · 求职流程 Stepper</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+       background:#f6f7fb;color:#222;line-height:1.55;padding:24px}
+  header{max-width:1280px;margin:0 auto 20px}
+  h1{font-size:24px;color:#1a73e8;display:flex;align-items:center;gap:10px}
+  h1 .badge{font-size:12px;background:#1a73e8;color:#fff;padding:2px 8px;border-radius:10px;font-weight:400}
+  header .sub{color:#666;font-size:14px;margin-top:6px}
+  header a{color:#1a73e8;text-decoration:none;margin-right:14px;font-size:13px}
+  .toolbar{max-width:1280px;margin:0 auto 16px;background:#fff;border-radius:10px;padding:14px 18px;
+           box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+  .toolbar textarea{flex:1;min-width:280px;min-height:80px;padding:8px 12px;border:1px solid #d6d8e0;border-radius:6px;font-size:13px;font-family:inherit;resize:vertical}
+  .toolbar input{width:240px;padding:8px 12px;border:1px solid #d6d8e0;border-radius:6px;font-size:14px}
+  .toolbar button{padding:10px 22px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;align-self:center}
+  .toolbar button:hover{background:#1557b0}
+  .toolbar button:disabled{background:#aaa;cursor:wait}
+  .stepper{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  @media(max-width:780px){.stepper{grid-template-columns:1fr}}
+  .step{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-left:4px solid #ccc}
+  .step.done{border-left-color:#34a853}
+  .step.run{border-left-color:#fbbc04}
+  .step.err{border-left-color:#ea4335}
+  .step h3{font-size:14px;color:#1a73e8;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .step h3 .num{display:inline-flex;width:22px;height:22px;background:#1a73e8;color:#fff;border-radius:50%;align-items:center;justify-content:center;font-size:12px}
+  .step .desc{font-size:11px;color:#888;margin-bottom:10px}
+  .step .body{font-size:12px;color:#333;max-height:240px;overflow:auto}
+  .step .body pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;background:#f8f9fb;padding:8px;border-radius:6px}
+  .tag{display:inline-block;background:#e8f0fe;color:#1a73e8;padding:2px 8px;border-radius:10px;font-size:11px;margin:2px 4px 2px 0}
+  .tag.ok{background:#e6f4ea;color:#137333}
+  .tag.warn{background:#fef7e0;color:#a56403}
+  .tag.err{background:#fce8e6;color:#a50e0e}
+  .summary{max-width:1280px;margin:18px auto 0;background:#fff;border-radius:10px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:13px;display:none}
+  .summary.show{display:block}
+  .summary .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}
+  .summary .row:last-child{border-bottom:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>OfferClaw <span class="badge">CareerFlow Stepper</span></h1>
+  <div class="sub">8 节点编排：profile → job_input → match → gap → plan → today → resume → application_suggest</div>
+  <div style="margin-top:10px">
+    <a href="/ui">← 返回 6 卡片控制台</a>
+    <a href="/docs">Swagger</a>
+    <a href="/health">Health</a>
+  </div>
+</header>
+
+<div class="toolbar">
+  <textarea id="jd" placeholder="粘贴 JD 原文（公司 / 岗位 / 地点 / 要求 / 职责 ...）— 也可只粘贴关键技术要求几行"></textarea>
+  <input id="title" placeholder="JD 标题（可选）" />
+  <button id="run">运行 CareerFlow</button>
+</div>
+
+<div class="stepper" id="stepper"></div>
+
+<div class="summary" id="summary"></div>
+
+<script>
+const STEPS = [
+  {key:"profile", title:"完善画像", desc:"从 user_profile.md 加载 13 字段（无硬编码）"},
+  {key:"job_input", title:"导入 JD", desc:"接收 JD 原文 / discovery 结果"},
+  {key:"match", title:"匹配岗位", desc:"调 match_job → 三档结论 + 缺口清单"},
+  {key:"gap", title:"分析缺口", desc:"按硬技能 / 软技能 / 经验拆分"},
+  {key:"plan", title:"生成 4 周路线", desc:"基于缺口的 plan_outline"},
+  {key:"today", title:"今日执行建议", desc:"career_agent 状态机驱动"},
+  {key:"resume", title:"简历骨架", desc:"skip_llm=True 时只输出框架"},
+  {key:"application_suggest", title:"投递建议", desc:"是否加入 applications.md（待用户确认）"},
+];
+
+function renderInitial(){
+  const root = document.getElementById("stepper");
+  root.innerHTML = STEPS.map((s,i)=>`
+    <div class="step" id="step-${s.key}">
+      <h3><span class="num">${i+1}</span> ${s.title}</h3>
+      <div class="desc">${s.desc}</div>
+      <div class="body" id="body-${s.key}"><span class="tag">待执行</span></div>
+    </div>`).join("");
+}
+
+function setStep(key, status, html){
+  const card = document.getElementById("step-"+key);
+  if (!card) return;
+  card.classList.remove("done","run","err");
+  card.classList.add(status==="done"?"done":status==="err"?"err":"run");
+  document.getElementById("body-"+key).innerHTML = html;
+}
+
+async function run(){
+  const jd = document.getElementById("jd").value.trim();
+  const title = document.getElementById("title").value.trim() || "未命名 JD";
+  if (!jd){ alert("请粘贴 JD 原文"); return; }
+  const btn = document.getElementById("run");
+  btn.disabled = true; btn.textContent = "运行中…";
+  document.getElementById("summary").classList.remove("show");
+  STEPS.forEach(s=>setStep(s.key,"run",`<span class="tag warn">运行中…</span>`));
+  try{
+    const r = await fetch("/api/flow/run",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({jd_text:jd, jd_title:title, skip_llm:true})
+    });
+    if(!r.ok) throw new Error("HTTP "+r.status+": "+await r.text());
+    const d = await r.json();
+    renderResults(d);
+  }catch(e){
+    STEPS.forEach(s=>setStep(s.key,"err",`<span class="tag err">${e.message||e}</span>`));
+  }finally{
+    btn.disabled = false; btn.textContent = "运行 CareerFlow";
+  }
+}
+
+function renderResults(d){
+  const errSet = new Set((d.errors||[]).map(x=>x.node));
+  const trace = new Set((d.trace||[]).map(x=>x.node));
+
+  // 1 profile
+  const prof = d.match_report?.profile_used || {};
+  setStep("profile", trace.has("profile")?"done":"err",
+    `<div>已加载 profile（来自 user_profile.md）</div>
+     <div style="margin-top:6px">${(d.match_report?.direction||"")?'<span class="tag ok">'+d.match_report.direction+'</span>':''}</div>`);
+
+  // 2 job_input
+  setStep("job_input", trace.has("job_input")?"done":"err",
+    `<span class="tag ok">JD 已纳入流程</span>`);
+
+  // 3 match
+  const mr = d.match_report || {};
+  const cls = mr.status==="当前适合投递"?"ok":mr.status==="当前暂不建议投递"?"err":"warn";
+  setStep("match", trace.has("match")?"done":"err",
+    `<div><span class="tag ${cls}">${mr.status||"-"}</span>
+       <span class="tag">${mr.direction||"-"}</span></div>
+     <pre style="margin-top:8px">${(mr.summary||"").slice(0,400)}</pre>`);
+
+  // 4 gap
+  const gaps = d.gaps || {};
+  const gapTotal = Object.values(gaps).reduce((s,v)=>s+(Array.isArray(v)?v.length:0),0);
+  setStep("gap", trace.has("gap")?"done":"err",
+    `<div>缺口总数：<span class="tag warn">${gapTotal}</span></div>
+     <pre style="margin-top:6px">${JSON.stringify(gaps,null,2).slice(0,500)}</pre>`);
+
+  // 5 plan
+  const plan = d.plan_outline || [];
+  setStep("plan", trace.has("plan")?"done":"err",
+    plan.length ? `<div>${plan.length} 周计划：</div><ol style="padding-left:20px;margin-top:6px">${plan.map(w=>`<li>${w.title||w.week||""}：${(w.focus||w.tasks||"").toString().slice(0,80)}</li>`).join("")}</ol>` : `<span class="tag">无可生成内容</span>`);
+
+  // 6 today
+  const t = d.today_advice || {};
+  setStep("today", trace.has("today")?"done":"err",
+    `<div><b>${t.headline||""}</b></div>
+     <pre style="margin-top:6px">${(t.detail||t.next_action||"").slice(0,300)}</pre>`);
+
+  // 7 resume
+  const r = d.resume_skeleton || {};
+  setStep("resume", trace.has("resume")?"done":"err",
+    `<div>模式：<span class="tag">${r.mode||"-"}</span>
+       命中关键词：<span class="tag ok">${(r.matched_keywords||[]).length}</span></div>
+     <div style="margin-top:6px">${(r.matched_keywords||[]).slice(0,12).map(k=>`<span class="tag">${k}</span>`).join("")}</div>`);
+
+  // 8 application_suggest
+  const a = d.application_suggestion || {};
+  const conf = (d.requires_confirmation||[]).filter(c=>(c.target_file||"").includes("applications.md"));
+  setStep("application_suggest", trace.has("application_suggest")?"done":"err",
+    `<div>决策：<span class="tag ${a.decision&&a.decision.includes("适合")?"ok":"warn"}">${a.decision||"-"}</span></div>
+     <div style="margin-top:6px">待确认 patch：${conf.length}</div>
+     ${conf.length? '<pre style="margin-top:6px">'+JSON.stringify(conf[0],null,2).slice(0,400)+'</pre>':''}`);
+
+  // summary
+  const s = document.getElementById("summary");
+  s.classList.add("show");
+  s.innerHTML = `
+    <div class="row"><span>trace 节点数</span><b>${(d.trace||[]).length} / 8</b></div>
+    <div class="row"><span>缺口总数</span><b>${gapTotal}</b></div>
+    <div class="row"><span>计划周数</span><b>${plan.length}</b></div>
+    <div class="row"><span>简历命中关键词</span><b>${(r.matched_keywords||[]).length}</b></div>
+    <div class="row"><span>待确认 patch</span><b>${(d.requires_confirmation||[]).length}</b></div>
+    <div class="row"><span>错误数</span><b>${(d.errors||[]).length}</b></div>
+  `;
+}
+
+document.getElementById("run").addEventListener("click", run);
+renderInitial();
+</script>
+</body>
+</html>

@@ -118,13 +118,17 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 
 按交付到用户面前的价值组织：
 
-1. **持续状态**：`user_profile.md` / `daily_log.md` / `applications.md` 是真正的运行时状态，每次操作都读写真实文件，不靠会话内存。
-2. **双通路判断**：JD 匹配同时存在 Prompt 契约版（`job_match_prompt.md`）和规则代码版（`match_job.py`），互为兜底与回归基线。
-3. **声明式编排**：RAG 走 LangGraph 4 节点 StateGraph + 条件边工具循环，工具调用可被自动路由。
-4. **流式响应**：计划生成与简历草稿走 Server-Sent Events，首字延迟 < 2s。
-5. **主动 Orchestrator**：`career_agent.py` 跨模块读 profile / log / 投递记录，输出"今日最该做什么"。
-6. **可解释**：所有 JD 缺口带 `[致命度]` / `[短期性]` 元数据；复盘带"偏离度判断"。
-8. **可治理**：`DATA_CONTRACT.md` §4.0 写入策略表明确每个文件的"可读 / 可写 / 自动写 / 需确认 / 入 Git"四列约束；JD 抓取按 `source_policy.md` 标注 `source_credibility` A/B/C 与 `notice` 字段；所有指标口径走 `verify_docs.py` 自动巡检防漂移。
+1. **持续状态**：`user_profile.md` / `daily_log.md` / `applications.md` 是真正的运行时状态，每次操作都读写真实文件，不靠会话内存（V3 阶段一引入 `profile_loader.py`，把 13 字段画像解析与 mtime 缓存集中到一处，彻底删除模块级 `DEMO_PROFILE` 兜底）。
+2. **CareerFlow 编排**：`career_flow.py` 在 LangGraph 上串起 8 节点（profile → job_input → match → gap → plan → today → resume → application_suggest），主流程禁止落盘，所有写入意图收在 `requires_confirmation`。一个 `/api/flow/run` 端点拿全状态。
+3. **双通路判断**：JD 匹配同时存在 Prompt 契约版（`job_match_prompt.md`）和规则代码版（`match_job.py`），互为兜底与回归基线。
+4. **声明式 RAG**：RAG 走 LangGraph 4 节点 StateGraph + 条件边工具循环，工具调用可被自动路由。
+5. **流式响应**：计划生成与简历草稿走 Server-Sent Events，首字延迟 < 2s。
+6. **主动 Orchestrator**：`career_agent.py` 跨模块读 profile / log / 投递记录，输出"今日最该做什么"。
+7. **JD Discovery 增强（V3 阶段四）**：`/api/jd/queries` 根据 profile 生成搜索关键词组合；`/api/jd/rank` 对一组候选 JD 调 `match_job` 排序，按"当前适合 / 中长期 / 信息不足 / 暂不建议"四档归并。
+8. **Resume Markdown 草稿（V3 阶段五）**：`/api/resume/markdown` 聚合 `user_profile.md` + `PROJECT_STATUS.md` + `docs/project_one_pager.md` 输出 6 段 Markdown 简历骨架，**默认无 LLM**；`/api/resume/build` 仍走 LLM 做 JD 定制项目段。
+9. **Stepper 控制台（V3 阶段三）**：`/ui/console` 一页跑完 8 节点，每个节点用色块标 done / running / err，并显示决策、缺口数、计划周数、命中关键词、待确认 patch。
+10. **可解释**：所有 JD 缺口带 `[致命度]` / `[短期性]` 元数据；复盘带"偏离度判断"。
+11. **可治理**：`DATA_CONTRACT.md` §4.0 写入策略表明确每个文件的"可读 / 可写 / 自动写 / 需确认 / 入 Git"四列约束；JD 抓取按 `source_policy.md` 标注 `source_credibility` A/B/C 与 `notice` 字段；所有指标口径走 `verify_docs.py` 自动巡检防漂移。
 
 ---
 
@@ -133,12 +137,12 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 | 层 | 选型 |
 |---|---|
 | **Agent 核心** | Python 3.10+ · 智谱 GLM-4-Flash（OpenAI 兼容 function calling）· 仅 `requests`，无 LangChain / LlamaIndex |
-| **RAG** | 智谱 `embedding-3`（2048 维）· ChromaDB 本地持久化 · 自写分块（RecursiveCharacterTextSplitter）+ 8 类 source_type 元数据 |
-| **API** | FastAPI + Uvicorn · 19 路由（13 核心 + 6 辅助）· Server-Sent Events 流式 · Swagger UI |
-| **Orchestration** | LangGraph 声明式 StateGraph（4 节点 + 条件边）· `career_agent.py` 跨模块状态聚合 |
+| **RAG** | 智谱 `embedding-3`（2048 维）· ChromaDB 本地持久化 · 自写分块（RecursiveCharacterTextSplitter）+ 9 类 source_type 元数据（profile / log / application / story / jd / resume / verification / system / doc） |
+| **API** | FastAPI + Uvicorn · **23 路由**（核心 + 辅助 + V3 新增 4 路：`/api/flow/run` · `/api/jd/queries` · `/api/jd/rank` · `/api/resume/markdown`）· Server-Sent Events 流式 · Swagger UI |
+| **Orchestration** | LangGraph 声明式 StateGraph：RAG 4 节点 + **CareerFlow 8 节点**（V3 新增）· `career_agent.py` 跨模块状态聚合 |
 | **JD 抓取** | `requests` 快速通道 + Playwright Headless Chromium 兜底（覆盖字节 / 阿里 / 腾讯等 SPA 招聘页） |
-| **State** | Markdown 文件 + `memory.json` 跨会话上下文 + `profiles/p*.json` 多 Persona |
-| **Testing** | pytest · `tests/rag_eval_set.json`（自建 50 题 3 桶）· `doctor.py`（10 项体检）· `verify_pipeline.py`（6 步冒烟）· `verify_docs.py`（4 份文档指标口径巡检）· `normalize_applications.py`（投递表 schema 校验） |
+| **State** | Markdown 文件 + `memory.json` 跨会话上下文 + `profiles/p*.json` 多 Persona · **`profile_loader.py`** 集中 13 字段解析 + mtime 缓存 |
+| **Testing** | pytest **58 / 58**（+3 skipped，需 `OFFERCLAW_E2E=1`）· `tests/rag_eval_set.json`（自建 50 题 3 桶）· `doctor.py`（10 项体检）· `verify_pipeline.py`（6 步冒烟）· `verify_docs.py`（4 份文档指标口径巡检）· `normalize_applications.py`（投递表 schema 校验） |
 | **运行平台** | 本地 / JVS Claw（文件空间 + 定时任务） |
 
 ---
@@ -152,9 +156,9 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 | RAG Recall@5 | **0.96** | 50 题平均 |
 | RAG cross_doc Recall@5 | **1.00** | 跨文档子集 |
 | RAG MRR | **0.67** | 知识库扩到 160 chunks 后较 118 chunks 时的 0.74 略降，召回率上升换来排序难度 |
-| FastAPI 路由数 | **19** | 13 核心业务 + 6 辅助/系统，含 2 条 SSE |
-| ChromaDB 知识库 | **160 chunks** | 覆盖 8 类 source_type |
-| pytest | **37 / 37** | 另有 3 个 e2e 默认跳过，需 `OFFERCLAW_E2E=1` |
+| FastAPI 路由数 | **23** | V3 新增 4 路：`/api/flow/run` · `/api/jd/queries` · `/api/jd/rank` · `/api/resume/markdown` + `/ui/console` |
+| ChromaDB 知识库 | **160 chunks** | 覆盖 9 类 source_type（含 V3 新增 `verification`） |
+| pytest | **58 / 58** | 另有 3 个 e2e 默认跳过，需 `OFFERCLAW_E2E=1`；新增 `test_career_flow.py`(5) + `test_phase3_to_7.py`(9) + `test_profile_loader.py`(7) |
 | 工程体检 | **doctor 10 OK**（doctor.py 自动从 `.env.local` 加载 `ZHIPU_API_KEY`，KEY 仅本地、不入 git；显示用 `xxx***xxx` 掩码） | 见 `python doctor.py`（含文档口径巡检 `verify_docs.py` 集成项） |
 | 文档口径巡检 | **all green** | `python verify_docs.py` —— 4 份关键文档（README / verification_report / project_one_pager / PROJECT_STATUS）的 7 类指标自动比对 |
 | 投递表校验 | **0 error** | `python normalize_applications.py` —— `applications.md` 字段 / 状态枚举 / 日期格式 / 公司+岗位去重 |

@@ -178,6 +178,49 @@ class ResumeBuildResponse(BaseModel):
     jd_summary_chars: int = 0
 
 
+class ResumeMarkdownRequest(BaseModel):
+    jd_text: str = ""
+    skip_llm: bool = True
+
+
+class ResumeMarkdownResponse(BaseModel):
+    resume_md: str
+    sections: list[str] = []
+    jd_chars: int = 0
+    skip_llm: bool = True
+    llm_used: bool = False
+    llm_error: str = ""
+
+
+class JDQueriesResponse(BaseModel):
+    queries: list[str] = []
+    profile_cities: list[str] = []
+    profile_directions: list[str] = []
+
+
+class JDCandidate(BaseModel):
+    title: str
+    jd_text: str
+
+
+class JDRankRequest(BaseModel):
+    candidates: list[JDCandidate]
+
+
+class JDRankItem(BaseModel):
+    title: str
+    status: str = ""
+    direction: str = ""
+    gap_count: int = 0
+    score: int = 0
+    reason: str = ""
+
+
+class JDRankResponse(BaseModel):
+    ranked: list[JDRankItem]
+    total: int = 0
+
+
 class ProfileResponse(BaseModel):
     name: str
     direction: list[str]
@@ -254,7 +297,11 @@ async def info():
             "GET /api/resume": "简历素材聚合（pitch + 故事预览）",
             "GET /api/today": "今日建议（聚合投递池 + 日志 + 状态机）",
             "POST /api/discover": "JD 半自动抽取（粘贴或 URL → 结构化 JD）",
+            "GET /api/jd/queries": "根据 profile 生成搜索关键词组合（半自动）",
+            "POST /api/jd/rank": "对一组候选 JD 排序（调用 match_job）",
             "POST /api/resume/build": "JD 定制简历项目段生成（基于事实清单 + LLM）",
+            "POST /api/resume/markdown": "完整 Markdown 简历草稿（默认无 LLM）",
+            "GET /ui/console": "求职流程 Stepper 控制台（Phase 3）",
             "POST /api/reset": "清空对话历史",
         },
     }
@@ -759,6 +806,66 @@ async def reset_conversation():
         return {"status": "ok", "message": "对话历史已清空"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"重置失败: {str(e)}")
+
+
+# =====================================================
+# Phase 3 / 4 / 5：UI Console + JD Discovery 增强 + Resume Markdown
+# =====================================================
+
+@app.get("/ui/console")
+async def ui_console():
+    """求职流程 Stepper 控制台（Phase 3）。"""
+    return FileResponse(os.path.join(BASE_DIR, "static", "console.html"))
+
+
+@app.get("/api/jd/queries", response_model=JDQueriesResponse)
+async def jd_queries():
+    """根据 user_profile.md 生成搜索关键词组合（不爬，仅推荐）。"""
+    try:
+        from job_discovery import build_search_queries
+        from profile_loader import load_profile
+        prof = load_profile()
+        return JDQueriesResponse(
+            queries=build_search_queries(prof),
+            profile_cities=prof.get("可接受地域") or [],
+            profile_directions=prof.get("方向优先级") or [],
+        )
+    except Exception as e:
+        _log.exception("jd_queries failed")
+        raise HTTPException(status_code=500, detail=f"生成搜索词失败: {str(e)}")
+
+
+@app.post("/api/jd/rank", response_model=JDRankResponse)
+async def jd_rank(req: JDRankRequest):
+    """对一组候选 JD 调 match_job 排序，输出推荐顺序。"""
+    try:
+        from job_discovery import rank_candidates
+        ranked = rank_candidates([c.model_dump() for c in req.candidates])
+        items = [JDRankItem(
+            title=r.get("title", ""), status=r.get("status", ""),
+            direction=r.get("direction", ""), gap_count=r.get("gap_count", 0),
+            score=r.get("score", 0), reason=r.get("reason", ""),
+        ) for r in ranked]
+        return JDRankResponse(ranked=items, total=len(items))
+    except Exception as e:
+        _log.exception("jd_rank failed")
+        raise HTTPException(status_code=500, detail=f"JD 排序失败: {str(e)}")
+
+
+@app.post("/api/resume/markdown", response_model=ResumeMarkdownResponse)
+async def resume_markdown(req: ResumeMarkdownRequest):
+    """生成完整 Markdown 简历草稿（默认无 LLM）。"""
+    try:
+        from resume_builder import build_resume_markdown
+        out = build_resume_markdown(jd_text=req.jd_text, skip_llm=req.skip_llm)
+        return ResumeMarkdownResponse(
+            resume_md=out["resume_md"], sections=out["sections"],
+            jd_chars=out["jd_chars"], skip_llm=out["skip_llm"],
+            llm_used=out.get("llm_used", False), llm_error=out.get("llm_error", ""),
+        )
+    except Exception as e:
+        _log.exception("resume_markdown failed")
+        raise HTTPException(status_code=500, detail=f"生成简历草稿失败: {str(e)}")
 
 
 # =====================================================

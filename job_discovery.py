@@ -206,3 +206,67 @@ if __name__ == "__main__":
     import json, sys
     sample = sys.stdin.read() if not sys.stdin.isatty() else "岗位名称：LLM 实习生\n公司：测试\n地点：上海\n要求：Python / RAG / FastAPI"
     print(json.dumps(discover(raw=sample), ensure_ascii=False, indent=2))
+
+
+# =====================================================================
+# Phase 4：JD Discovery 增强 —— query_builder + ranker
+# =====================================================================
+
+def build_search_queries(profile: dict | None = None, max_queries: int = 6) -> List[str]:
+    """根据 profile 生成搜索关键词组合（不去爬，仅供用户复制到搜索引擎）。"""
+    if profile is None:
+        from profile_loader import load_profile
+        profile = load_profile()
+    cities = profile.get("可接受地域") or ["上海", "南京"]
+    directions = profile.get("方向优先级") or ["AI 应用开发"]
+    skills = (profile.get("熟练技能") or [])[:3]
+    work_type = "实习" if "实习" in (profile.get("求职性质") or "实习") else "校招"
+
+    queries: List[str] = []
+    for d in directions[:3]:
+        for c in cities[:2]:
+            base = f"{d} {work_type} {c}"
+            if skills:
+                base += " " + " ".join(skills)
+            queries.append(base.strip())
+            if len(queries) >= max_queries:
+                return queries
+    return queries
+
+
+def rank_candidates(candidates: List[Dict], profile: dict | None = None) -> List[Dict]:
+    """对候选 JD 列表调用 match_job，返回带 status/direction/score 的排序结果。
+
+    candidates: [{"title": str, "jd_text": str}, ...]
+    返回排序后的 [{...原字段, "status", "direction", "score", "reason"}]
+    """
+    from match_job import run_match, format_report
+    if profile is None:
+        from profile_loader import load_profile
+        profile = load_profile()
+
+    _ORDER = {"当前适合投递": 3, "中长期可转向": 2,
+              "信息不足，建议补充后再判断": 1, "当前暂不建议投递": 0}
+
+    out = []
+    for c in candidates:
+        jd_text = c.get("jd_text", "")
+        title = c.get("title", "未命名")
+        try:
+            r = run_match(profile, jd_text, jd_title=title)
+            status = r.conclusion or ""
+            direction = r.direction or ""
+            gaps = sum(len(v or []) for v in (r.gap_list or {}).values())
+            reason = (r.conclusion_reason or format_report(r) or "")[:140]
+        except Exception as e:
+            status, direction, gaps, reason = "error", "", 99, str(e)
+        out.append({
+            **c,
+            "status": status,
+            "direction": direction,
+            "gap_count": gaps,
+            "score": _ORDER.get(status, 0),
+            "reason": reason,
+        })
+    out.sort(key=lambda x: (-x["score"], x.get("gap_count", 99)))
+    return out

@@ -51,6 +51,7 @@ DEFAULT_FILES = [
     ("jd_candidates.md", "jd"),
     ("docs/resume_pitch.md", "resume"),
     ("docs/project_one_pager.md", "doc"),
+    ("docs/verification_report.md", "verification"),
 ]
 
 
