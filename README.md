@@ -41,7 +41,13 @@ OfferClaw 的思路是用一个带状态的 Agent 把这条链路连起来：所
 
 - 1 分钟现场演示脚本：[`docs/demo_script.md`](docs/demo_script.md)
 - 现场可复现的证据链（doctor / pytest / RAG eval / `/health` / 一次完整查询）：[`docs/verification_report.md`](docs/verification_report.md)
-- 截图证据（6 张）：[`docs/screenshots/`](docs/screenshots/)（投递前补齐，命名规范见目录内 README）
+- 截图证据（6 张已入库）：[`docs/screenshots/`](docs/screenshots/)
+  - `01_doctor_all_green.png` — doctor 10 OK · 0 WARN · 0 ERR（KEY 自 `.env.local` 自动加载，掩码显示）
+  - `02_verify_pipeline_all_green.png` — 端到端 6/6 步通过
+  - `03_pytest_37_passed.png` — `pytest -v` 37 passed · 3 skipped
+  - `04_eval_rag_recall_0.96.png` — `eval_rag.py` overall Recall@5=0.960 / MRR=0.673
+  - `05_ui_six_cards.png` — `/ui` 6 卡片控制台实拍（Playwright）
+  - `06_swagger_19_routes.png` — `/docs` Swagger 19 路由实拍（Playwright）
 
 ---
 
