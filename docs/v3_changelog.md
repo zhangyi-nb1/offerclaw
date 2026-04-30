@@ -22,7 +22,7 @@ OfferClaw 从「6 张功能卡片 + 19 路由」升级为「**8 节点 LangGraph
 | 4 | **JD Discovery 增强** | `build_search_queries(profile)` + `rank_candidates(jds)` + `/api/jd/queries` + `/api/jd/rank` | 候选 JD 按"当前适合 / 中长期 / 信息不足 / 暂不建议"四档归并；不爬虫、不自动投递 |
 | 5 | **Resume 完整化** | `build_resume_markdown()` 6 段 MD 草稿 + `/api/resume/markdown` | 默认无 LLM；可选叠加 `/api/resume/build` 的 LLM 项目段 |
 | 6 | **RAG 知识域扩展** | `rag_ingest.DEFAULT_FILES` 加入 `docs/verification_report.md`（`source_type=verification`） | 9 类 source_type：profile / log / system / doc / application / story / jd / resume / **verification** |
-| 7 | **真实使用与投递验证** | `tests/test_phase3_to_7.py::test_phase7_careerflow_answers_4_core_questions` | CareerFlow 能一次性回答 §10.3 四个核心问题：过去一周做了什么 / 哪份 JD 现在最值得投 / 我今天最该做什么 / 简历还缺哪一段 |
+| 7 | **真实使用与投递验证** | `tests/test_phase3_to_7.py::test_phase7_careerflow_answers_4_core_questions` + 真实公网 JD 端到端验证（[`docs/real_jd_run_nio_vas.md`](real_jd_run_nio_vas.md)） | CareerFlow 能一次性回答 §10.3 四个核心问题；蔚来 NIO VAS 实习 JD：8 节点全过 / status=当前适合投递 / direction=主方向 / 0 errors |
 
 ---
 

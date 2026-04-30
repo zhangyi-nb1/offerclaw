@@ -46,6 +46,7 @@ OfferClaw 的思路是用一个带状态的 Agent 把这条链路连起来：所
 
 - 1 分钟现场演示脚本：[`docs/demo_script.md`](docs/demo_script.md)
 - V3 阶段 1-7 完整改进总结：[`docs/v3_changelog.md`](docs/v3_changelog.md)
+- 真实公网 JD 端到端跑通案例（蔚来 NIO · 大模型应用开发实习 VAS，8 节点全过 / status=当前适合投递 / 0 errors）：[`docs/real_jd_run_nio_vas.md`](docs/real_jd_run_nio_vas.md)
 - 现场可复现的证据链（doctor / pytest / RAG eval / `/health` / 一次完整查询）：[`docs/verification_report.md`](docs/verification_report.md)
 - 截图证据（**7 张已入库**）：[`docs/screenshots/`](docs/screenshots/)
   - `01_doctor_all_green.png` — doctor 10 OK · 0 WARN · 0 ERR（KEY 自 `.env.local` 自动加载，掩码显示）
