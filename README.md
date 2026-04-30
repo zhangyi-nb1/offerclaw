@@ -150,7 +150,7 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 | **Orchestration** | LangGraph 声明式 StateGraph：RAG 4 节点 + **CareerFlow 8 节点**（V3 新增）· `career_agent.py` 跨模块状态聚合 |
 | **JD 抓取** | `requests` 快速通道 + Playwright Headless Chromium 兜底（覆盖字节 / 阿里 / 腾讯等 SPA 招聘页） |
 | **State** | Markdown 文件 + `memory.json` 跨会话上下文 + `profiles/p*.json` 多 Persona · **`profile_loader.py`** 集中 13 字段解析 + mtime 缓存 |
-| **Testing** | pytest **58 / 58**（+3 skipped，需 `OFFERCLAW_E2E=1`）· `tests/rag_eval_set.json`（自建 50 题 3 桶）· `doctor.py`（10 项体检）· `verify_pipeline.py`（6 步冒烟）· `verify_docs.py`（4 份文档指标口径巡检）· `normalize_applications.py`（投递表 schema 校验） |
+| **Testing** | pytest **64 / 64**（+3 skipped，需 `OFFERCLAW_E2E=1`）· `tests/rag_eval_set.json`（自建 50 题 3 桶）· `doctor.py`（10 项体检）· `verify_pipeline.py`（6 步冒烟）· `verify_docs.py`（4 份文档指标口径巡检）· `normalize_applications.py`（投递表 schema 校验） |
 | **运行平台** | 本地 / JVS Claw（文件空间 + 定时任务） |
 
 ---
@@ -244,12 +244,36 @@ offerclaw/
 - [x] V1.5：RAG（LangGraph + ChromaDB）+ FastAPI 接口层
 - [x] V2：6 卡片控制台 + Orchestrator + JD 自动抓取 + JD 定制简历 + 多 Persona 回归 + 工程自检
 - [x] **V3 阶段 1-7（产品级 Agent 化）**：状态真实化（`profile_loader.py`，去 `DEMO_PROFILE`） · CareerFlow 8 节点编排（`career_flow.py` + `/api/flow/run`） · `/ui/console` Stepper · JD 排序（`/api/jd/queries` + `/api/jd/rank`） · Markdown 简历草稿（`/api/resume/markdown`，无 LLM 也能跑） · RAG 加 `verification` source_type · 4 核心问题端到端验证 — 详见 [`docs/v3_changelog.md`](docs/v3_changelog.md)
-- [ ] 真实投递场景验证（≥ 1 次实投 + 数据回流）
+- [x] **V3 收口审计**：全仓 `DEMO_PROFILE` 0 生产耦合 · `/api/info` 与 24 真实路由对账 0 漂移（补 `/api/info`、`/api/plan/stream`、`/api/resume/build/stream`，删幻影 `/docs`） · `v3_changelog.md` & `README.md` 措辞精确化（DEMO_PROFILE = 解耦生产链路、保留为单测 fixture） · pytest 64/64 + `skip_llm=True` 验证无 `ZHIPU_API_KEY` 仍跑通 8 节点
+- [ ] 真实投递场景验证（≥ 1 次实投 + 数据回流，SOP 见下方）
 - [ ] 简历最终可投递版本（Word / PDF）
 - [ ] 1 分钟 Demo 视频（可选）
 - [ ] RAG 评估集扩到 100 题（可选）
 
 完整推进记录见 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)。作品集自评（6 维 Portfolio Signal）见 [`docs/project_one_pager.md`](docs/project_one_pager.md) §11。
+
+---
+
+## 真实投递回流 SOP
+
+> 目标：用 OfferClaw 完成 ≥ 1 次**真实投递闭环**——抓 JD → CareerFlow 跑通 → 改简历 → 投出 → 状态机回填 → 复盘入 RAG。
+
+1. **进 candidates 测试池**：把目标 JD 整段粘进 `POST /api/discover` 抽结构 → 加到 `jd_candidates.md` 末尾（保留原文链接 + 抓取时间）。
+2. **CareerFlow 评估**：`POST /api/flow/run` 传 `jd_text` + `jd_title`，看 `match_report.status`（适合 / 中长期 / 信息不足 / 暂不建议）+ `gaps[*]` 致命度 + `today_actions`。也可直接打开 `/ui/console` 一页跑完。
+3. **决策分叉**：
+   - `适合投递` → 进 §4；
+   - 其他三档 → 进 `plan/4_weeks` 转入"中长期补能"，本轮**不投**。
+4. **生成简历草稿**：`POST /api/resume/markdown`（默认无 LLM 拿骨架）+ `POST /api/resume/build`（SSE 流式 LLM 写 JD 定制项目段），合并导出为 `resume_v{N}_{company}.md`，再人工导出 PDF/Word。
+5. **登记投递池**：在 `applications.md` §投递清单加一行，状态 `准备投递`；HR 联系方式按"姓+尾号 4 位"脱敏；备注写简历版本号。**禁止 `[DEMO]` 前缀**（`normalize_applications.py` 会过滤）。
+6. **真实投出** → 状态改 `已投递`；当日 `POST /api/daily` 追加一条 daily_log。
+7. **回流证据**：把 HR 回复截图 / 笔试通知放到 `docs/screenshots/applications/`（脱敏后）；状态推进至 `面试中` / `已拒绝` / `已 Offer` 时同步改 `applications.md`。
+8. **复盘入 RAG**：每条投递结果用 1-2 句写进 `daily_log.md`（如"NIO VAS 笔试通过 / Offer 拒"），下次 `python rag_ingest.py` 即自动入库，让 `/api/today` 与 CareerFlow 学到这条经验。
+
+**最小可交付证据集**（让评委 / HR 看见闭环）：
+- `applications.md` 至少 1 行真实投递（非 DEMO）
+- `docs/real_jd_run_*.md` 至少 1 份 8 节点 trace
+- `daily_log.md` 至少 1 条对应投递的状态条目
+- `docs/screenshots/applications/` 至少 1 张回流证据（脱敏）
 
 ---
 
