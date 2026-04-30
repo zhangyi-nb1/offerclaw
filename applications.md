@@ -48,7 +48,7 @@
 
 | 日期 | 公司 | 岗位 | 来源 | 地点 | 匹配结论 | 样本定位 | 当前状态 | 下一步动作 | 备注 |
 |---|---|---|---|---|---|---|---|---|---|
-| 2026-04-15 | 蔚来 NIO | 大模型应用开发实习生（VAS） | NIO 官方招聘 | 上海 | 适合 | Agent / RAG 应用工程 | 已投递 | 等 7 天反馈，4-29 仍无回则跟进内推 | 简历 v1.2 · JD 见 jd_candidates.md |
+| 2026-04-15 | 蔚来 NIO | 大模型应用开发实习生（VAS） | NIO 官方招聘 | 上海 | 适合 | Agent / RAG 应用工程 | 已投递 | 等 7 天反馈，4-29 仍无回则跟进内推；2026-05-01 已用 V3 CareerFlow 复跑（status=当前适合投递，0 errors，trace 见 docs/real_jd_run_nio_vas_v2.md） | 简历 v1.2 · JD 见 jd_candidates.md · V3 复核简历草稿 _local_notes/resume_v1_nio.md |
 | 2026-04-22 | [DEMO] Acme AI Lab | LLM 应用开发实习 | BOSS 直聘 | 上海 / 远程 | 暂不 | 偏后端 Java 主线 | 不投递 | [示例数据 · 非真实投递] 复盘缺口写入 daily_log；下季度若转向再评估 | 硬否决：Java 主线不符 SOUL 方向 |
 | 2026-04-24 | [DEMO] Beta Agent Co | AI Agent 实习生 | 内推 | 上海 | 适合 | Agent 工程 | 准备投递 | [示例数据 · 非真实投递] 4-27 前定稿求职信 + 简历 v1.3，4-28 投递 | HR：（脱敏） |
 

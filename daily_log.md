@@ -430,3 +430,7 @@
 - 03:45 [smoke-test] V2 stage-2 wired
 - 03:53 RAG学习
 - 03:54 12344
+
+
+## 2026-05-01
+- 03:43 V3 收口审计完成（commit a519ca4）；用 CareerFlow 8 节点对 NIO VAS 实习 JD 复跑，status=当前适合投递，gaps=4，0 errors；生成 _local_notes/resume_v1_nio.md（436 字符骨架）；trace 落 docs/real_jd_run_nio_vas_v2.md。下一步：等 NIO 反馈 / 4-29 后内推跟进。

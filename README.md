@@ -245,7 +245,8 @@ offerclaw/
 - [x] V2：6 卡片控制台 + Orchestrator + JD 自动抓取 + JD 定制简历 + 多 Persona 回归 + 工程自检
 - [x] **V3 阶段 1-7（产品级 Agent 化）**：状态真实化（`profile_loader.py`，去 `DEMO_PROFILE`） · CareerFlow 8 节点编排（`career_flow.py` + `/api/flow/run`） · `/ui/console` Stepper · JD 排序（`/api/jd/queries` + `/api/jd/rank`） · Markdown 简历草稿（`/api/resume/markdown`，无 LLM 也能跑） · RAG 加 `verification` source_type · 4 核心问题端到端验证 — 详见 [`docs/v3_changelog.md`](docs/v3_changelog.md)
 - [x] **V3 收口审计**：全仓 `DEMO_PROFILE` 0 生产耦合 · `/api/info` 与 24 真实路由对账 0 漂移（补 `/api/info`、`/api/plan/stream`、`/api/resume/build/stream`，删幻影 `/docs`） · `v3_changelog.md` & `README.md` 措辞精确化（DEMO_PROFILE = 解耦生产链路、保留为单测 fixture） · pytest 64/64 + `skip_llm=True` 验证无 `ZHIPU_API_KEY` 仍跑通 8 节点
-- [ ] 真实投递场景验证（≥ 1 次实投 + 数据回流，SOP 见下方）
+- [x] **真实投递回流验证 #1**：NIO VAS 实习 JD 端到端复跑 — `/api/discover` 抽出 10 项技能 → `/api/flow/run` 8 节点 status=当前适合投递 / 0 errors → `/api/resume/markdown` 生成 6 段骨架（`_local_notes/resume_v1_nio.md`）→ `/api/daily` 写入 daily_log → `applications.md` 同步 V3 复核标记 → trace 落 [`docs/real_jd_run_nio_vas_v2.md`](docs/real_jd_run_nio_vas_v2.md)
+- [ ] 真实投递回流 #2：≥ 1 次新投递 + HR 反馈截图入 `docs/screenshots/applications/`
 - [ ] 简历最终可投递版本（Word / PDF）
 - [ ] 1 分钟 Demo 视频（可选）
 - [ ] RAG 评估集扩到 100 题（可选）
