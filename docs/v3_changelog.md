@@ -16,7 +16,7 @@ OfferClaw 从「6 张功能卡片 + 19 路由」升级为「**8 节点 LangGraph
 
 | 阶段 | 主题 | 关键交付 | 验收 |
 |---|---|---|---|
-| 1 | **状态真实化** | `profile_loader.py`：13 字段 Markdown 解析 + mtime 缓存；删除 `match_job.DEMO_PROFILE` | `/api/match` 直读真画像；编辑 `user_profile.md` 即可改变同一 JD 的结论 |
+| 1 | **状态真实化** | `profile_loader.py`：13 字段 Markdown 解析 + mtime 缓存；解耦 `/api/match` 等生产链路对 `match_job.DEMO_PROFILE` 的依赖（仅保留为单测 fixture） | `/api/match` 直读真画像；编辑 `user_profile.md` 即可改变同一 JD 的结论 |
 | 2 | **CareerFlow 编排化** | `career_flow.py`：8 节点 LangGraph（profile → job_input → match → gap → plan → today → resume → application_suggest）；`/api/flow/run` | 主流程**禁止落盘**，所有写意图收在 `requires_confirmation`；`skip_llm=True` 时无需 `ZHIPU_API_KEY` |
 | 3 | **UI 产品化** | `static/console.html` + `/ui/console`：8 步 Stepper 一页跑完整流程 | 截图：[`07_ui_console_careerflow_stepper.png`](screenshots/07_ui_console_careerflow_stepper.png) |
 | 4 | **JD Discovery 增强** | `build_search_queries(profile)` + `rank_candidates(jds)` + `/api/jd/queries` + `/api/jd/rank` | 候选 JD 按"当前适合 / 中长期 / 信息不足 / 暂不建议"四档归并；不爬虫、不自动投递 |

@@ -126,7 +126,7 @@ JVS Claw 部署见 [`deployment.md`](deployment.md)。
 
 按交付到用户面前的价值组织：
 
-1. **持续状态**：`user_profile.md` / `daily_log.md` / `applications.md` 是真正的运行时状态，每次操作都读写真实文件，不靠会话内存（V3 阶段一引入 `profile_loader.py`，把 13 字段画像解析与 mtime 缓存集中到一处，彻底删除模块级 `DEMO_PROFILE` 兜底）。
+1. **持续状态**：`user_profile.md` / `daily_log.md` / `applications.md` 是真正的运行时状态，每次操作都读写真实文件，不靠会话内存（V3 阶段一引入 `profile_loader.py`，把 13 字段画像解析与 mtime 缓存集中到一处，彻底解耦生产链路对模块级 `DEMO_PROFILE` 的依赖；`match_job.DEMO_PROFILE` 仅保留作为单元测试 fixture）。
 2. **CareerFlow 编排**：`career_flow.py` 在 LangGraph 上串起 8 节点（profile → job_input → match → gap → plan → today → resume → application_suggest），主流程禁止落盘，所有写入意图收在 `requires_confirmation`。一个 `/api/flow/run` 端点拿全状态。
 3. **双通路判断**：JD 匹配同时存在 Prompt 契约版（`job_match_prompt.md`）和规则代码版（`match_job.py`），互为兜底与回归基线。
 4. **声明式 RAG**：RAG 走 LangGraph 4 节点 StateGraph + 条件边工具循环，工具调用可被自动路由。
