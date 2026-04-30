@@ -98,6 +98,24 @@ class MatchResponse(BaseModel):
     suggestions: list = []
 
 
+class FlowRunRequest(BaseModel):
+    jd_text: str
+    jd_title: str = "未命名 JD"
+    skip_llm: bool = True
+
+
+class FlowRunResponse(BaseModel):
+    match_report: dict = {}
+    gaps: dict = {}
+    plan_outline: list = []
+    today_advice: dict = {}
+    resume_skeleton: dict = {}
+    application_suggestion: dict = {}
+    requires_confirmation: list = []
+    trace: list = []
+    errors: list = []
+
+
 class PlanRequest(BaseModel):
     gaps: str = ""
 
@@ -229,6 +247,7 @@ async def info():
             "POST /api/stream": "RAG 问答（SSE 流式）",
             "POST /api/search": "仅检索",
             "POST /api/match": "岗位匹配（三档结论 + 结构化缺口）",
+            "POST /api/flow/run": "CareerFlow 主流程（profile→match→gap→plan→today→resume→application_suggest）",
             "POST /api/plan": "基于缺口生成 4 周路线规划",
             "GET /api/daily": "今日 daily_log + 最近 7 天摘要",
             "POST /api/daily": "向 daily_log.md 追加今日条目",
@@ -362,6 +381,39 @@ async def job_match(req: MatchRequest):
     except Exception as e:
         _log.exception("match failed")
         raise HTTPException(status_code=500, detail=f"匹配失败: {str(e)}")
+
+
+@app.post("/api/flow/run", response_model=FlowRunResponse)
+async def flow_run(req: FlowRunRequest):
+    """CareerFlow 主流程：profile → match → gap → plan → today → resume → application_suggest。
+
+    返回完整 CareerState，前端可分段渲染（卡片 / Stepper）。
+    任何写入意图都收在 ``requires_confirmation`` 中，**本接口不会写文件**。
+    """
+    import asyncio
+    try:
+        from career_flow import run_career_flow
+        loop = asyncio.get_event_loop()
+        out = await loop.run_in_executor(
+            None,
+            lambda: run_career_flow(
+                req.jd_text, jd_title=req.jd_title, skip_llm=req.skip_llm,
+            ),
+        )
+        return FlowRunResponse(
+            match_report=out.get("match_report") or {},
+            gaps=out.get("gaps") or {},
+            plan_outline=out.get("plan_outline") or [],
+            today_advice=out.get("today_advice") or {},
+            resume_skeleton=out.get("resume_skeleton") or {},
+            application_suggestion=out.get("application_suggestion") or {},
+            requires_confirmation=out.get("requires_confirmation") or [],
+            trace=out.get("trace") or [],
+            errors=out.get("errors") or [],
+        )
+    except Exception as e:
+        _log.exception("flow_run failed")
+        raise HTTPException(status_code=500, detail=f"CareerFlow 失败: {str(e)}")
 
 
 @app.post("/api/plan", response_model=PlanResponse)
