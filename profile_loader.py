@@ -322,7 +322,57 @@ def reset_cache() -> None:
     _CACHE["data"] = None
 
 
+# =====================================================
+# Schema validation（V4 §5）
+# =====================================================
+
+PROFILE_SCHEMA_PATH = os.path.join(BASE_DIR, "profile_schema.json")
+_SCHEMA_CACHE: dict[str, Any] = {"data": None, "mtime": None}
+
+
+def load_schema() -> dict:
+    """读 profile_schema.json，带 mtime 缓存。"""
+    if _SCHEMA_CACHE["data"] is not None:
+        try:
+            if os.path.getmtime(PROFILE_SCHEMA_PATH) == _SCHEMA_CACHE["mtime"]:
+                return _SCHEMA_CACHE["data"]
+        except OSError:
+            pass
+    with open(PROFILE_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    _SCHEMA_CACHE["data"] = data
+    try:
+        _SCHEMA_CACHE["mtime"] = os.path.getmtime(PROFILE_SCHEMA_PATH)
+    except OSError:
+        pass
+    return data
+
+
+def validate_profile(p: dict) -> tuple[bool, list[str]]:
+    """校验 profile dict 是否符合 schema。
+
+    Returns ``(ok, errors)``：errors 是字符串列表（友好可读），
+    可以直接落到日志或返回给前端。
+    """
+    try:
+        import jsonschema
+    except ImportError:  # pragma: no cover
+        return True, ["jsonschema 未安装，校验被跳过"]
+    schema = load_schema()
+    validator = jsonschema.Draft7Validator(schema)
+    errors = []
+    for err in validator.iter_errors(p):
+        path = ".".join(str(x) for x in err.absolute_path) or "<root>"
+        errors.append(f"[{path}] {err.message}")
+    return (len(errors) == 0), errors
+
+
 if __name__ == "__main__":
     import json as _j
     p = load_profile()
     print(_j.dumps(p, ensure_ascii=False, indent=2))
+    ok, errs = validate_profile(p)
+    print(f"\nschema valid: {ok}")
+    if errs:
+        for e in errs:
+            print(f"  - {e}")

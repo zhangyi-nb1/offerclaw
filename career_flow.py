@@ -56,6 +56,7 @@ class CareerState(TypedDict, total=False):
     trace: list                 # [(node, action, source)]
     requires_confirmation: list  # [{target_file, suggested_patch, reason}]
     errors: list                # [{node, message}]
+    route_taken: str            # 仅 routed graph 写入，linear graph 留空
 
 
 # =====================================================
@@ -330,6 +331,146 @@ def run_career_flow(jd_text: str, *, jd_title: str = "未命名 JD",
         "errors": [],
     }
     final = get_graph().invoke(state)
+    return dict(final)
+
+
+# =====================================================
+# Agentic Graph：基于 state 的条件路由（V4 §2）
+# =====================================================
+#
+# 让 LangGraph 不再是"流程画板"。三档结论触发三条不同的后续路径，
+# job_input 检测出 JD 过短直接终结。三个 router 函数与节点解耦，
+# 每个分支都打 ``route_taken`` 入 trace 供 observability 回放。
+#
+#     profile → job_input → [router_jd]
+#                              ├ "too_short" → END
+#                              └ "ok" → match → gap → [router_match]
+#                                                          ├ "suitable" → plan → today → resume → application_suggest → END
+#                                                          ├ "stretch"  → plan → today → END
+#                                                          └ "not_recommended" → application_suggest → END
+
+ROUTE_LABELS = {
+    "too_short": "jd_too_short:skip_all",
+    "suitable": "suitable:full_path",
+    "stretch": "stretch:plan_today_only",
+    "not_recommended": "not_recommended:gap_only",
+}
+
+
+def _route_after_job_input(state: CareerState) -> str:
+    """JD 过短直接收尾——避免下游 match/gap 输出垃圾结论。"""
+    for e in state.get("errors", []) or []:
+        if e.get("node") == "job_input" and "过短" in (e.get("message") or ""):
+            return "too_short"
+    return "ok"
+
+
+def _route_after_gap(state: CareerState) -> str:
+    """根据 match_report.status 决定下半段路径。"""
+    status = (state.get("match_report") or {}).get("status", "")
+    if "适合" in status:
+        return "suitable"
+    if "中长期" in status:
+        return "stretch"
+    if "暂不建议" in status:
+        return "not_recommended"
+    return "stretch"  # 兜底
+
+
+def _route_after_today(state: CareerState) -> str:
+    return _route_after_gap(state)  # stretch 在 today 后结束；suitable 继续 resume
+
+
+def _mark_route(state: CareerState, label: str) -> CareerState:
+    """把分支选择写入 state 供 trace/UI 用。仅 router 调用，节点函数不直接调。"""
+    state["route_taken"] = ROUTE_LABELS.get(label, label)
+    _trace(state, "router", f"route={state['route_taken']}", source="routed_graph")
+    return state
+
+
+def _router_jd_node(state: CareerState) -> CareerState:
+    """空操作节点；纯粹为了能让 router_jd 在 trace 里留痕。
+    LangGraph 的 conditional edge 不会自动写 state，所以这里显式打标。"""
+    label = _route_after_job_input(state)
+    return _mark_route(state, label)
+
+
+def _router_match_node(state: CareerState) -> CareerState:
+    return _mark_route(state, _route_after_gap(state))
+
+
+def _router_today_node(state: CareerState) -> CareerState:
+    return _mark_route(state, _route_after_today(state))
+
+
+def build_routed_graph():
+    """带条件分支的 CareerFlow。同样的 8 节点，但根据 state 选择不同路径。"""
+    g = StateGraph(CareerState)
+    g.add_node("profile", profile_node)
+    g.add_node("job_input", job_input_node)
+    g.add_node("router_jd", _router_jd_node)
+    g.add_node("match", match_node)
+    g.add_node("gap", gap_node)
+    g.add_node("router_match", _router_match_node)
+    g.add_node("plan", plan_node)
+    g.add_node("today", today_node)
+    g.add_node("router_today", _router_today_node)
+    g.add_node("resume", resume_node)
+    g.add_node("application_suggest", application_suggest_node)
+
+    g.set_entry_point("profile")
+    g.add_edge("profile", "job_input")
+    g.add_edge("job_input", "router_jd")
+    g.add_conditional_edges(
+        "router_jd",
+        _route_after_job_input,
+        {"too_short": END, "ok": "match"},
+    )
+    g.add_edge("match", "gap")
+    g.add_edge("gap", "router_match")
+    g.add_conditional_edges(
+        "router_match",
+        _route_after_gap,
+        {
+            "suitable": "plan",
+            "stretch": "plan",
+            "not_recommended": "application_suggest",
+        },
+    )
+    g.add_edge("plan", "today")
+    g.add_edge("today", "router_today")
+    g.add_conditional_edges(
+        "router_today",
+        _route_after_today,
+        {"suitable": "resume", "stretch": END, "not_recommended": END},
+    )
+    g.add_edge("resume", "application_suggest")
+    g.add_edge("application_suggest", END)
+    return g.compile()
+
+
+_COMPILED_ROUTED = None
+
+
+def get_routed_graph():
+    global _COMPILED_ROUTED
+    if _COMPILED_ROUTED is None:
+        _COMPILED_ROUTED = build_routed_graph()
+    return _COMPILED_ROUTED
+
+
+def run_career_flow_routed(jd_text: str, *, jd_title: str = "未命名 JD",
+                           skip_llm: bool = True) -> dict:
+    """带条件路由版的 CareerFlow。失败/短 JD 不会拖累下游节点。"""
+    state: CareerState = {
+        "jd_text": jd_text,
+        "jd_title": jd_title,
+        "skip_llm": skip_llm,
+        "trace": [],
+        "requires_confirmation": [],
+        "errors": [],
+    }
+    final = get_routed_graph().invoke(state)
     return dict(final)
 
 

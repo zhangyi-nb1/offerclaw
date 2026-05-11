@@ -228,6 +228,20 @@ class ProfileResponse(BaseModel):
     updated_at: str
 
 
+class AgentRequest(BaseModel):
+    message: str
+    mode: str = "deterministic"  # 'deterministic' | 'llm'
+    max_steps: int = 3
+
+
+class AgentResponse(BaseModel):
+    answer: str
+    tool_calls: list = []
+    mode: str = "deterministic"
+    steps: int = 0
+    errors: list = []
+
+
 def _parse_profile(content: str) -> tuple[str, list[str], str, str]:
     """从 user_profile.md 解析关键字段；缺字段时降级为占位值，不再硬编码。"""
     import re
@@ -868,6 +882,68 @@ async def resume_markdown(req: ResumeMarkdownRequest):
     except Exception as e:
         _log.exception("resume_markdown failed")
         raise HTTPException(status_code=500, detail=f"生成简历草稿失败: {str(e)}")
+
+
+@app.post("/api/agent", response_model=AgentResponse)
+async def agent_run(req: AgentRequest):
+    """ReAct Agent：一句自然语言 → tool 调用 → 结论（V4 §3）。
+
+    mode='deterministic'（默认）：纯关键词路由，无 KEY 也能用，秒级返回。
+    mode='llm'：function calling 工具循环，无 KEY 自动降级到 deterministic。
+    """
+    try:
+        from react_agent import run as agent_run_fn
+        out = agent_run_fn(req.message, mode=req.mode, max_steps=req.max_steps)
+        return AgentResponse(**out)
+    except Exception as e:
+        _log.exception("agent_run failed")
+        raise HTTPException(status_code=500, detail=f"agent 执行失败: {str(e)}")
+
+
+# =====================================================
+# Observability：trace + 重放（V4 §4）
+# =====================================================
+
+@app.get("/api/trace")
+async def trace_list(limit: int = 20):
+    """列出最近 N 条 CareerFlow trace（按 mtime 倒序）。"""
+    from observability import list_traces
+    return {"items": list_traces(limit=limit)}
+
+
+@app.get("/api/trace/{trace_id}")
+async def trace_detail(trace_id: str):
+    """读回单条 trace 的全部 JSONL 事件。"""
+    from observability import read_trace
+    try:
+        return read_trace(trace_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"trace 不存在: {trace_id}")
+
+
+@app.post("/api/flow/run_traced", response_model=FlowRunResponse)
+async def flow_run_traced(req: FlowRunRequest):
+    """跑 routed CareerFlow 并落 trace 文件，返回 state（含 _trace_id）。"""
+    from observability import trace_career_flow
+    try:
+        out = trace_career_flow(
+            req.jd_text, jd_title=req.jd_title, skip_llm=req.skip_llm,
+            routed=True,
+        )
+        return FlowRunResponse(
+            match_report=out.get("match_report", {}),
+            gaps=out.get("gaps", {}),
+            plan_outline=out.get("plan_outline", []),
+            today_advice=out.get("today_advice", {}),
+            resume_skeleton=out.get("resume_skeleton", {}),
+            application_suggestion=out.get("application_suggestion", {}),
+            requires_confirmation=out.get("requires_confirmation", []),
+            trace=out.get("trace", []) + [{"_trace_id": out["_trace_id"]}],
+            errors=out.get("errors", []),
+        )
+    except Exception as e:
+        _log.exception("flow_run_traced failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =====================================================
