@@ -1,149 +1,784 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="auto">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OfferClaw · 求职作战控制台</title>
+<title>OfferClaw · 求职作战工作台</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
-       background:#f6f7fb;color:#222;line-height:1.55;padding:24px}
-  header{max-width:1280px;margin:0 auto 20px}
-  h1{font-size:24px;color:#1a73e8;display:flex;align-items:center;gap:10px}
-  h1 .badge{font-size:12px;background:#1a73e8;color:#fff;padding:2px 8px;border-radius:10px;font-weight:400}
-  header .sub{color:#666;font-size:14px;margin-top:6px}
-  .toolbar{max-width:1280px;margin:0 auto 16px;background:#fff;border-radius:10px;padding:14px 18px;
-           box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .toolbar input{flex:1;min-width:280px;padding:8px 12px;border:1px solid #d6d8e0;border-radius:6px;font-size:14px}
-  .toolbar button{padding:8px 18px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px}
-  .toolbar button:hover{background:#1557b0}
-  .toolbar .ans{flex-basis:100%;background:#f0f4fa;border-left:3px solid #1a73e8;padding:10px 14px;
-                font-size:13px;color:#333;max-height:160px;overflow:auto;white-space:pre-wrap;display:none}
-  .grid{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-  @media(max-width:980px){.grid{grid-template-columns:repeat(2,1fr)}}
-  @media(max-width:640px){.grid{grid-template-columns:1fr}}
-  .card{background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;flex-direction:column;min-height:280px}
-  .card h3{font-size:15px;color:#1a73e8;margin-bottom:4px;display:flex;align-items:center;gap:6px}
-  .card .desc{font-size:12px;color:#888;margin-bottom:12px}
-  .card .body{flex:1;font-size:13px;color:#333;overflow:auto;max-height:340px}
-  .card .body pre{white-space:pre-wrap;word-break:break-word;font-family:inherit}
-  .card textarea{width:100%;min-height:80px;padding:8px;border:1px solid #d6d8e0;border-radius:6px;
-                 font-family:inherit;font-size:13px;resize:vertical;margin-bottom:8px}
-  .card .actions{display:flex;gap:8px;margin-top:10px}
-  .card button{padding:6px 14px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px}
-  .card button:hover{background:#1557b0}
-  .card button.secondary{background:#eef0f5;color:#333}
-  .card button.secondary:hover{background:#dee2eb}
-  .card .placeholder{background:#fff7e6;border:1px dashed #f0c46d;color:#8a6510;padding:10px 12px;
-                     border-radius:6px;font-size:12px;line-height:1.7}
-  .tag{display:inline-block;background:#e8f0fe;color:#1a73e8;padding:2px 8px;border-radius:10px;
-       font-size:11px;margin:2px 4px 2px 0}
-  .status{font-size:11px;padding:2px 8px;border-radius:10px;margin-left:6px}
-  .s-ok{background:#e6f4ea;color:#137333}
-  .s-warn{background:#fff7e6;color:#8a6510}
-  .s-err{background:#fce8e6;color:#c5221f}
-  footer{max-width:1280px;margin:24px auto 0;text-align:center;font-size:12px;color:#888}
-  footer a{color:#1a73e8;text-decoration:none;margin:0 8px}
+  /* ===========================================================
+     Design tokens — inspired by Claude.ai / ChatGPT
+     light + dark via prefers-color-scheme + manual override
+     =========================================================== */
+  :root {
+    --bg: #FAFAF9;
+    --surface: #FFFFFF;
+    --surface-2: #F5F5F4;
+    --surface-hover: #F0EFEE;
+    --border: #E7E5E4;
+    --border-strong: #D6D3D1;
+    --text: #1C1917;
+    --text-secondary: #57534E;
+    --text-muted: #A8A29E;
+    --accent: #D97757;
+    --accent-hover: #C56342;
+    --accent-soft: #FBEFE9;
+    --success: #10B981;
+    --success-soft: #ECFDF5;
+    --warning: #F59E0B;
+    --warning-soft: #FFFBEB;
+    --error: #EF4444;
+    --error-soft: #FEF2F2;
+    --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.04);
+    --shadow: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+    --shadow-lg: 0 8px 24px rgba(28, 25, 23, 0.08), 0 2px 6px rgba(28, 25, 23, 0.04);
+    --radius-sm: 6px;
+    --radius: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --sidebar-w: 260px;
+    --header-h: 60px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="auto"] {
+      --bg: #1A1A1A;
+      --surface: #262626;
+      --surface-2: #2D2D2D;
+      --surface-hover: #333333;
+      --border: #404040;
+      --border-strong: #525252;
+      --text: #FAFAF9;
+      --text-secondary: #D4D4D8;
+      --text-muted: #78716C;
+      --accent: #E09975;
+      --accent-hover: #ECAB87;
+      --accent-soft: #3D2920;
+      --success-soft: #064E3B;
+      --warning-soft: #451A03;
+      --error-soft: #450A0A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1A1A1A;
+    --surface: #262626;
+    --surface-2: #2D2D2D;
+    --surface-hover: #333333;
+    --border: #404040;
+    --border-strong: #525252;
+    --text: #FAFAF9;
+    --text-secondary: #D4D4D8;
+    --text-muted: #78716C;
+    --accent: #E09975;
+    --accent-hover: #ECAB87;
+    --accent-soft: #3D2920;
+    --success-soft: #064E3B;
+    --warning-soft: #451A03;
+    --error-soft: #450A0A;
+  }
+
+  /* ===== Reset ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  button { font: inherit; cursor: pointer; }
+  input, textarea { font: inherit; color: inherit; }
+  a { color: inherit; text-decoration: none; }
+  pre, code { font-family: var(--font-mono); font-size: 0.85em; }
+
+  /* ===== Layout ===== */
+  .app {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: 100vh;
+  }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 14px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px 18px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius);
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 600;
+    font-size: 16px;
+    box-shadow: var(--shadow-sm);
+  }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+  .brand-name { font-weight: 600; font-size: 15px; }
+  .brand-version { font-size: 11px; color: var(--text-muted); }
+
+  .nav { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; flex: 1; }
+  .nav-group-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 12px 10px 6px;
+    font-weight: 600;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 14px;
+    transition: background 0.12s, color 0.12s;
+    cursor: pointer;
+    user-select: none;
+  }
+  .nav-item:hover { background: var(--surface-hover); color: var(--text); }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+  .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.9; }
+  .nav-item .badge {
+    margin-left: auto;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  .nav-item.active .badge { background: var(--accent); color: #fff; }
+
+  .sidebar-footer {
+    padding: 12px 8px 4px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .theme-toggle {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: border-color 0.15s;
+  }
+  .theme-toggle:hover { border-color: var(--border-strong); }
+  .theme-toggle svg { width: 14px; height: 14px; }
+
+  /* ===== Main ===== */
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    height: var(--header-h);
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 32px;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: saturate(180%) blur(8px);
+  }
+  .search {
+    flex: 1;
+    max-width: 720px;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search svg {
+    position: absolute;
+    left: 14px;
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+  .search input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 14px 9px 38px;
+    font-size: 14px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    outline: none;
+  }
+  .search input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .icon-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 7px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .icon-btn:hover { background: var(--surface-hover); border-color: var(--border); }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  .content {
+    flex: 1;
+    padding: 32px;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* ===== Today banner ===== */
+  .today {
+    background: linear-gradient(135deg, var(--accent-soft), var(--surface));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 18px 22px;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    box-shadow: var(--shadow-sm);
+  }
+  .today-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .today-icon svg { width: 20px; height: 20px; }
+  .today-body { flex: 1; min-width: 0; }
+  .today-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .today-headline { font-size: 16px; font-weight: 600; color: var(--text); margin-top: 2px; }
+  .today-meta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+  /* ===== Section header ===== */
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
+  .section-action { font-size: 13px; color: var(--accent); }
+
+  /* ===== Cards grid ===== */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 260px;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  }
+  .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius);
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .card-icon svg { width: 18px; height: 18px; }
+  .card-title-block { flex: 1; min-width: 0; }
+  .card-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .card-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+
+  .status-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    background: var(--surface-2);
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  .status-dot::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+  .status-dot.ok { color: var(--success); background: var(--success-soft); }
+  .status-dot.ok::before { background: var(--success); }
+  .status-dot.warn { color: var(--warning); background: var(--warning-soft); }
+  .status-dot.warn::before { background: var(--warning); }
+  .status-dot.err { color: var(--error); background: var(--error-soft); }
+  .status-dot.err::before { background: var(--error); }
+  .status-dot.run::before { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.3; transform: scale(1.4); } }
+
+  .card-body {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-secondary);
+    overflow: auto;
+    max-height: 320px;
+    line-height: 1.65;
+  }
+  .card-body pre {
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    border: 1px solid var(--border);
+  }
+  .card-body p + p { margin-top: 8px; }
+  .card-body ul { margin: 6px 0 0 18px; }
+  .card-body ul li { margin-top: 4px; }
+  .card-body b, .card-body strong { color: var(--text); font-weight: 600; }
+
+  .card-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .input, .textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 13px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    outline: none;
+    color: var(--text);
+  }
+  .input:focus, .textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .textarea { resize: vertical; min-height: 72px; line-height: 1.55; font-family: var(--font-sans); }
+  .input.compact { padding: 6px 10px; font-size: 12.5px; flex: 1; min-width: 0; }
+
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.12s, transform 0.05s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { background: var(--text-muted); border-color: var(--text-muted); cursor: not-allowed; }
+  .btn.secondary { background: transparent; color: var(--text); border-color: var(--border-strong); }
+  .btn.secondary:hover { background: var(--surface-hover); }
+  .btn svg { width: 13px; height: 13px; }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    border: 1px solid var(--border);
+  }
+  .chip.accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .chip.ok { background: var(--success-soft); color: var(--success); border-color: transparent; }
+
+  /* ===== Skeleton ===== */
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-hover) 50%, var(--surface-2) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+    border-radius: var(--radius-sm);
+    height: 14px;
+    margin: 8px 0;
+  }
+  .skeleton.short { width: 40%; }
+  .skeleton.mid { width: 70%; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ===== Streaming cursor ===== */
+  .cursor::after {
+    content: '▌';
+    color: var(--accent);
+    animation: blink 1s steps(2) infinite;
+    margin-left: 2px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ===== Inline ask answer ===== */
+  .ask-answer {
+    position: fixed;
+    top: calc(var(--header-h) + 12px);
+    left: 50%;
+    transform: translateX(calc(-50% + var(--sidebar-w) / 2));
+    width: 720px;
+    max-width: calc(100vw - 80px);
+    max-height: 60vh;
+    overflow: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 16px 18px;
+    z-index: 20;
+    font-size: 13.5px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    display: none;
+  }
+  .ask-answer.show { display: block; }
+  .ask-answer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .ask-answer-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 0 4px;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .ask-answer-close:hover { color: var(--text); }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .topbar { padding: 0 16px; }
+    .content { padding: 20px 16px; }
+    .ask-answer { left: 16px; right: 16px; width: auto; max-width: none; transform: none; }
+  }
+
+  /* ===== Toast ===== */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--text);
+    color: var(--bg);
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    box-shadow: var(--shadow-lg);
+    z-index: 50;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>🦅 OfferClaw <span class="badge">V1.5 求职作战控制台</span></h1>
-  <p class="sub">本地长期运行的求职作战 AI Agent · 画像 → 匹配 → 规划 → 执行 → 复盘</p>
-</header>
+<div class="app">
 
-<!-- V2 阶段三：今日建议横条 -->
-<div id="todayBar" style="max-width:1280px;margin:0 auto 12px;padding:12px 16px;border-radius:10px;background:linear-gradient(90deg,#0f172a,#1e293b);color:#fff;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-  <span style="font-size:14px;background:#f59e0b;padding:3px 10px;border-radius:6px;font-weight:600">今日建议</span>
-  <span id="todayHeadline" style="font-size:15px;font-weight:600">加载中…</span>
-  <span id="todayMeta" style="font-size:12px;opacity:.75;margin-left:auto"></span>
-  <button class="secondary" style="background:#334155;border:none;color:#fff" onclick="loadToday()">刷新</button>
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">OC</div>
+      <div class="brand-text">
+        <span class="brand-name">OfferClaw</span>
+        <span class="brand-version">V4 · 求职作战工作台</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-group-label">工作流</div>
+      <a class="nav-item active" data-section="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        工作台
+      </a>
+      <a class="nav-item" href="/ui/console">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        CareerFlow 流程
+        <span class="badge">8 步</span>
+      </a>
+
+      <div class="nav-group-label">外部</div>
+      <a class="nav-item" href="/docs" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Swagger /docs
+      </a>
+      <a class="nav-item" href="/health" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        /health
+      </a>
+      <a class="nav-item" href="/api/info" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        /api/info
+      </a>
+      <a class="nav-item" href="https://github.com/zhangyi-nb1/offerclaw" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        GitHub
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span id="apiStatus">连接中…</span>
+      <button class="theme-toggle" id="themeToggle" title="切换主题">
+        <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <main class="main">
+    <div class="topbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="askInput" placeholder="问 OfferClaw 任何关于项目 / 简历 / 投递的问题（RAG）" autocomplete="off"/>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn secondary" onclick="ask()">提问</button>
+      </div>
+    </div>
+
+    <div class="ask-answer" id="askAns">
+      <div class="ask-answer-head">
+        <span>RAG 回答</span>
+        <button class="ask-answer-close" onclick="document.getElementById('askAns').classList.remove('show')">×</button>
+      </div>
+      <div id="askAnsBody"></div>
+    </div>
+
+    <div class="content">
+
+      <!-- 今日建议横幅 -->
+      <div class="today">
+        <div class="today-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="today-body">
+          <div class="today-label">今日建议</div>
+          <div class="today-headline" id="todayHeadline">加载中…</div>
+          <div class="today-meta" id="todayMeta"></div>
+        </div>
+        <button class="btn secondary" onclick="loadToday()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          刷新
+        </button>
+      </div>
+
+      <!-- 卡片网格 -->
+      <div class="section-header">
+        <span class="section-title">求职作战面板</span>
+        <span class="section-action">6 个模块</span>
+      </div>
+
+      <div class="grid">
+
+        <!-- 1 画像 -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div class="card-title-block">
+              <div class="card-title">用户画像</div>
+              <div class="card-subtitle">GET /api/profile</div>
+            </div>
+            <span class="status-dot" id="profStatus">未加载</span>
+          </div>
+          <div class="card-body" id="profBody">
+            <div class="skeleton mid"></div>
+            <div class="skeleton short"></div>
+            <div class="skeleton"></div>
+          </div>
+          <div class="card-actions">
+            <button class="btn secondary" onclick="loadProfile()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              刷新画像
+            </button>
+          </div>
+        </div>
+
+        <!-- 2 JD 匹配 -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </div>
+            <div class="card-title-block">
+              <div class="card-title">JD 分析与匹配</div>
+              <div class="card-subtitle">规则 + LLM 双通路 · /api/match</div>
+            </div>
+            <span class="status-dot" id="matchStatus">未运行</span>
+          </div>
+          <textarea class="textarea" id="jdInput" placeholder="粘贴一份 JD 全文或岗位描述..."></textarea>
+          <div class="card-actions">
+            <button class="btn" onclick="doMatch()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              开始匹配
+            </button>
+            <button class="btn secondary" onclick="loadSampleJD()">示例</button>
+            <input class="input compact" id="jdUrl" placeholder="或贴 URL"/>
+            <button class="btn secondary" onclick="doDiscover()">URL 抽取</button>
+          </div>
+          <div class="card-body" id="matchBody" style="margin-top:14px"></div>
+        </div>
+
+        <!-- 3 缺口 -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div class="card-title-block">
+              <div class="card-title">缺口清单</div>
+              <div class="card-subtitle">从 ② 自动抽取核心缺口</div>
+            </div>
+            <span class="status-dot" id="gapStatus">等待匹配</span>
+          </div>
+          <div class="card-body" id="gapBody">
+            <p style="color:var(--text-muted)">先在 ② 卡片跑一次匹配即可看到结构化缺口。</p>
+          </div>
+        </div>
+
+        <!-- 4 计划 -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <div class="card-title-block">
+              <div class="card-title">学习/求职计划</div>
+              <div class="card-subtitle">SSE 流式 · /api/plan/stream</div>
+            </div>
+            <span class="status-dot" id="planStatus">未生成</span>
+          </div>
+          <div class="card-actions" style="margin-top:0; margin-bottom:14px">
+            <button class="btn" onclick="doPlan(false)">基于 ③ 缺口</button>
+            <button class="btn secondary" onclick="doPlan(true)">通用方向</button>
+          </div>
+          <div class="card-body" id="planBody">
+            <p style="color:var(--text-muted)">点击上方按钮，约 15-30 秒（流式输出）。</p>
+          </div>
+        </div>
+
+        <!-- 5 每日 -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            </div>
+            <div class="card-title-block">
+              <div class="card-title">每日执行 & 复盘</div>
+              <div class="card-subtitle">读写 daily_log.md</div>
+            </div>
+            <span class="status-dot" id="dailyStatus">未加载</span>
+          </div>
+          <textarea class="textarea" id="dailyInput" placeholder="今天做了什么？例：完成 RAG eval Recall@5 跑到 0.96"></textarea>
+          <div class="card-actions">
+            <button class="btn" onclick="appendDaily()">追加到今日</button>
+            <button class="btn secondary" onclick="loadDaily()">刷新近 7 天</button>
+          </div>
+          <div class="card-body" id="dailyBody" style="margin-top:14px"></div>
+        </div>
+
+        <!-- 6 简历 -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
+            <div class="card-title-block">
+              <div class="card-title">简历素材</div>
+              <div class="card-subtitle">pitch + 故事库 · /api/resume</div>
+            </div>
+            <span class="status-dot" id="resumeStatus">未加载</span>
+          </div>
+          <div class="card-actions" style="margin-top:0; margin-bottom:14px">
+            <button class="btn secondary" onclick="loadResume()">加载素材</button>
+            <button class="btn" onclick="buildResumeForJD()">JD 定制段（SSE）</button>
+          </div>
+          <div class="card-body" id="resumeBody">
+            <p style="color:var(--text-muted)">点击上方按钮加载，或针对 ② JD 流式生成项目段。</p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
 </div>
 
-<!-- 顶部 RAG 问答工具条 -->
-<div class="toolbar">
-  <input id="askInput" placeholder="问 OfferClaw 任何关于项目 / 简历 / 投递的问题（走 RAG）" />
-  <button onclick="ask()">提问</button>
-  <button class="secondary" onclick="document.getElementById('askAns').style.display='none'">收起</button>
-  <div id="askAns" class="ans"></div>
-</div>
-
-<div class="grid">
-
-  <!-- 卡片 1：用户画像 -->
-  <div class="card">
-    <h3>① 用户画像 <span id="profStatus" class="status s-warn">加载中</span></h3>
-    <p class="desc">来源：user_profile.md（GET /api/profile）</p>
-    <div class="body" id="profBody">点击下方按钮加载</div>
-    <div class="actions">
-      <button onclick="loadProfile()">刷新画像</button>
-    </div>
-  </div>
-
-  <!-- 卡片 2：JD 分析 -->
-  <div class="card">
-    <h3>② JD 分析与匹配 <span id="matchStatus" class="status s-warn">未运行</span></h3>
-    <p class="desc">规则 + LLM 双通路（POST /api/match）</p>
-    <textarea id="jdInput" placeholder="粘贴一份 JD 全文或岗位描述..."></textarea>
-    <div class="actions" style="flex-wrap:wrap">
-      <button onclick="doMatch()">开始匹配</button>
-      <button class="secondary" onclick="loadSampleJD()">填入示例 JD</button>
-      <input id="jdUrl" placeholder="或贴 JD 网页 URL" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"/>
-      <button class="secondary" onclick="doDiscover()">从 URL 抽取</button>
-    </div>
-    <div class="body" id="matchBody" style="margin-top:10px"></div>
-  </div>
-
-  <!-- 卡片 3：缺口清单 -->
-  <div class="card">
-    <h3>③ 缺口清单 <span id="gapStatus" class="status s-warn">等待匹配</span></h3>
-    <p class="desc">从 ② 的匹配结果中自动抽取核心缺口段</p>
-    <div class="body" id="gapBody">先在卡片 ② 跑一次"开始匹配"</div>
-  </div>
-
-  <!-- 卡片 4：计划生成 -->
-  <div class="card">
-    <h3>④ 学习/求职计划 <span id="planStatus" class="status s-warn">未生成</span></h3>
-    <p class="desc">基于 ③ 缺口清单调 LLM 生成 4 周路线（POST /api/plan）</p>
-    <div class="actions" style="margin-bottom:8px">
-      <button onclick="doPlan()">基于③缺口生成计划</button>
-      <button class="secondary" onclick="doPlan(true)">通用方向规划</button>
-    </div>
-    <div class="body" id="planBody">点击上方按钮，约 15-30 秒</div>
-  </div>
-
-  <!-- 卡片 5：每日执行 / 复盘 -->
-  <div class="card">
-    <h3>⑤ 每日执行 & 周复盘 <span id="dailyStatus" class="status s-warn">未加载</span></h3>
-    <p class="desc">读写 daily_log.md（GET/POST /api/daily）</p>
-    <textarea id="dailyInput" placeholder="今天做了什么？例如：完成 RAG eval Recall@5 跑到 0.96"></textarea>
-    <div class="actions">
-      <button onclick="appendDaily()">追加到今日</button>
-      <button class="secondary" onclick="loadDaily()">刷新近 7 天</button>
-    </div>
-    <div class="body" id="dailyBody" style="margin-top:10px">点击"刷新近 7 天"</div>
-  </div>
-
-  <!-- 卡片 6：简历草稿 -->
-  <div class="card">
-    <h3>⑥ 简历草稿 <span id="resumeStatus" class="status s-warn">未加载</span></h3>
-    <p class="desc">聚合 resume_pitch + 故事库标题（GET /api/resume）</p>
-    <div class="actions" style="margin-bottom:8px;flex-wrap:wrap">
-      <button onclick="loadResume()">加载简历素材</button>
-      <button class="secondary" onclick="buildResumeForJD()">针对②JD 生成项目段</button>
-    </div>
-    <div class="body" id="resumeBody">点击上方按钮加载</div>
-  </div>
-
-</div>
-
-<footer>
-  <a href="/docs" target="_blank">Swagger /docs</a> ·
-  <a href="/health" target="_blank">/health</a> ·
-  <a href="/api/info" target="_blank">/api/info</a> ·
-  <a href="https://github.com/zhangyi-nb1/offerclaw" target="_blank">GitHub</a>
-</footer>
+<div class="toast" id="toast"></div>
 
 <script>
 const SAMPLE_JD = `岗位名称：大模型应用开发实习生
@@ -154,271 +789,366 @@ const SAMPLE_JD = `岗位名称：大模型应用开发实习生
 技术要求：熟悉 Python；了解 LLM / Prompt / Agent；有 RAG / LangGraph / FastAPI 项目经验优先
 工作性质：驻场`;
 
-let LAST_GAPS_TEXT = "";  // 给 ④ 计划生成用
+let LAST_GAPS_TEXT = "";
 
-async function loadProfile(){
-  const body=document.getElementById('profBody');
-  const st=document.getElementById('profStatus');
-  body.innerHTML='加载中...';st.className='status s-warn';st.textContent='加载中';
-  try{
-    const r=await fetch('/api/profile');
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    const dirs=(d.direction||[]).map(x=>`<span class="tag">${x}</span>`).join('');
-    body.innerHTML=`
-      <p><b>姓名：</b>${d.name||'—'}</p>
-      <p style="margin-top:8px"><b>方向：</b><br>${dirs||'—'}</p>
-      <p style="margin-top:8px"><b>技能摘要：</b><br>${d.skills_summary||'—'}</p>
-      <p style="margin-top:8px;color:#888;font-size:12px">更新于：${d.updated_at||'—'}</p>`;
-    st.className='status s-ok';st.textContent='已加载';
-  }catch(e){body.innerHTML=`<div style="color:#c5221f">加载失败：${e.message}</div>`;
-    st.className='status s-err';st.textContent='失败';}
+// ===== Theme toggle =====
+const themeToggle = document.getElementById('themeToggle');
+themeToggle.addEventListener('click', () => {
+  const html = document.documentElement;
+  const cur = html.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : (cur === 'light' ? 'auto' : 'dark');
+  html.setAttribute('data-theme', next);
+  showToast(`主题：${next === 'auto' ? '跟随系统' : (next === 'dark' ? '深色' : '浅色')}`);
+});
+
+// ===== Toast =====
+function showToast(msg, kind='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2200);
 }
 
-function loadSampleJD(){document.getElementById('jdInput').value=SAMPLE_JD;}
-
-// V2 阶段四：URL/原文 → 结构化 JD → 自动塞回 textarea
-async function doDiscover(){
-  const url=document.getElementById('jdUrl').value.trim();
-  const raw=document.getElementById('jdInput').value.trim();
-  if(!url && !raw){alert('请填写 URL 或先粘贴 JD 原文');return;}
-  const status=document.getElementById('matchStatus');
-  const body=document.getElementById('matchBody');
-  status.className='status s-warn';
-  status.textContent= url ? '浏览器渲染中（约10-30秒）...' : '抽取中...';
-  body.innerHTML= url ? '⏳ 正在启动无头浏览器渲染页面，请稍候...' : '抽取中...';
-  try{
-    const r=await fetch('/api/discover',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({raw,url})});
-    if(!r.ok){
-      let detail='';
-      try{const j=await r.json();detail=j.detail||'';}catch(e){detail=await r.text();}
-      throw new Error(detail||'HTTP '+r.status);
-    }
-    const d=await r.json();
-    document.getElementById('jdInput').value=d.jd_text||raw;
-    const summary=`✓ 已抽取：${d.company||'?'} · ${d.title||'?'} · ${d.location||'?'} · ${d.job_type||'?'}\n`+
-      `命中技能：${(d.skills_detected||[]).join(', ')||'（未命中）'}\n`+
-      `原文 ${d.raw_chars} 字 · 现在可点"开始匹配"`;
-    body.textContent=summary;
-    status.className='status s-ok';status.textContent='已抽取';
-  }catch(e){status.className='status s-err';status.textContent='抽取失败';
-    body.textContent='抽取失败：'+e.message;}
-}
-
-async function doMatch(){
-  const jd=document.getElementById('jdInput').value.trim();
-  const body=document.getElementById('matchBody');
-  const gapBody=document.getElementById('gapBody');
-  const st=document.getElementById('matchStatus');
-  const gst=document.getElementById('gapStatus');
-  if(!jd){alert('请先粘贴 JD');return;}
-  body.innerHTML='匹配中（约 5-15 秒）...';st.className='status s-warn';st.textContent='运行中';
-  gapBody.innerHTML='匹配中...';gst.className='status s-warn';gst.textContent='等待';
-  try{
-    const r=await fetch('/api/match',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({jd_text:jd})});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    const cls=d.status==='适合'?'s-ok':(d.status==='中长期可转向'?'s-warn':'s-err');
-    body.innerHTML=`<p><b>结论：</b><span class="status ${cls}">${d.status}</span>
-                    <span style="color:#666;font-size:12px;margin-left:6px">方向：${d.direction||'—'}</span></p>
-                    <pre style="margin-top:10px">${escapeHtml(d.summary)}</pre>`;
-    st.className='status '+cls;st.textContent=d.status;
-    // 结构化缺口直出
-    renderGaps(d.gap_list||{}, d.suggestions||[]);
-  }catch(e){body.innerHTML=`<div style="color:#c5221f">匹配失败：${e.message}</div>`;
-    st.className='status s-err';st.textContent='失败';}
-}
-
-function renderGaps(gapList, suggestions){
-  const gapBody=document.getElementById('gapBody');
-  const gst=document.getElementById('gapStatus');
-  let html='';let total=0;let plain='';
-  for(const [cat,items] of Object.entries(gapList)){
-    if(!items||!items.length)continue;
-    html+=`<p style="margin-top:6px"><b>${cat}（${items.length}）</b></p><ul style="margin-left:18px">`;
-    plain+=`【${cat}】\n`;
-    for(const it of items){html+=`<li>${escapeHtml(it)}</li>`;plain+=`- ${it}\n`;total++;}
-    html+='</ul>';
-  }
-  if(suggestions&&suggestions.length){
-    html+=`<p style="margin-top:10px;color:#1a73e8"><b>📌 建议</b></p><ul style="margin-left:18px">`;
-    plain+='\n【建议】\n';
-    for(const s of suggestions){html+=`<li>${escapeHtml(s)}</li>`;plain+=`- ${s}\n`;}
-    html+='</ul>';
-  }
-  if(total===0){gapBody.innerHTML='<div style="color:#137333">✓ 本次匹配未识别到硬缺口</div>';
-    gst.className='status s-ok';gst.textContent='无硬缺口';LAST_GAPS_TEXT='';
-  }else{gapBody.innerHTML=html;
-    gst.className='status s-ok';gst.textContent=`已抽取 ${total}`;
-    LAST_GAPS_TEXT=plain.trim();}
-}
-
-async function doPlan(useGeneric){
-  const body=document.getElementById('planBody');
-  const st=document.getElementById('planStatus');
-  const gaps=useGeneric?'':LAST_GAPS_TEXT;
-  if(!useGeneric && !gaps){
-    if(!confirm('③ 缺口卡还没数据，要不要按"通用方向"生成？')) return;
-  }
-  body.innerHTML='<pre id="planStream" style="max-height:380px;overflow:auto;white-space:pre-wrap"></pre>';
-  const streamEl=document.getElementById('planStream');
-  st.className='status s-warn';st.textContent='LLM 生成中...';
-  try{
-    const r=await fetch('/api/plan/stream',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({gaps:gaps})});
-    if(!r.ok){const t=await r.text();throw new Error('HTTP '+r.status+' '+t);}
-    const reader=r.body.getReader();
-    const dec=new TextDecoder();
-    let buf='';
-    while(true){
-      const {done,value}=await reader.read();
-      if(done) break;
-      buf+=dec.decode(value,{stream:true});
-      const lines=buf.split('\n');
-      buf=lines.pop();
-      for(const line of lines){
-        if(!line.startsWith('data: ')) continue;
-        const data=line.slice(6);
-        try{
-          const c=JSON.parse(data);
-          if(c.text){streamEl.textContent+=c.text;streamEl.scrollTop=streamEl.scrollHeight;}
-          else if(c.done){
-            body.innerHTML=`<p style="color:#888;font-size:12px">已写入：${escapeHtml(c.saved_path||'—')}</p>`+body.innerHTML;
-            st.className='status s-ok';st.textContent='已生成';return;
-          }else if(c.error){throw new Error(c.error);}
-        }catch(e){if(e.message!=='Unexpected end of JSON input') throw e;}
-      }
-    }
-    st.className='status s-ok';st.textContent='已生成';
-  }catch(e){body.innerHTML=`<div style="color:#c5221f">规划失败：${e.message}</div>`;
-    st.className='status s-err';st.textContent='失败';}
-}
-
-async function loadDaily(){
-  const body=document.getElementById('dailyBody');
-  const st=document.getElementById('dailyStatus');
-  body.innerHTML='加载中...';st.className='status s-warn';st.textContent='加载中';
-  try{
-    const r=await fetch('/api/daily');
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    const today=d.today_log?`<p><b>📅 今日</b></p><pre>${escapeHtml(d.today_log)}</pre>`
-                           :'<p style="color:#888">今日还没有记录，在上方输入框追加一条</p>';
-    const recent=d.recent_summary?`<p style="margin-top:10px"><b>📊 近 ${d.recent_days} 天</b></p><pre>${escapeHtml(d.recent_summary)}</pre>`:'';
-    body.innerHTML=today+recent;
-    st.className='status s-ok';st.textContent='已加载';
-  }catch(e){body.innerHTML=`<div style="color:#c5221f">读取失败：${e.message}</div>`;
-    st.className='status s-err';st.textContent='失败';}
-}
-
-async function appendDaily(){
-  const inp=document.getElementById('dailyInput');
-  const text=inp.value.trim();
-  if(!text){alert('请输入今日记录');return;}
-  const st=document.getElementById('dailyStatus');
-  st.className='status s-warn';st.textContent='写入中';
-  try{
-    const r=await fetch('/api/daily',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})});
-    if(!r.ok){const t=await r.text();throw new Error('HTTP '+r.status+' '+t);}
-    inp.value='';
-    await loadDaily();
-  }catch(e){alert('写入失败：'+e.message);st.className='status s-err';st.textContent='失败';}
-}
-
-async function loadResume(){
-  const body=document.getElementById('resumeBody');
-  const st=document.getElementById('resumeStatus');
-  body.innerHTML='加载中...';st.className='status s-warn';st.textContent='加载中';
-  try{
-    const r=await fetch('/api/resume');
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    body.innerHTML=`<p><b>📄 resume_pitch.md</b></p>
-                    <pre style="max-height:200px;overflow:auto">${escapeHtml(d.pitch||'')}</pre>
-                    <p style="margin-top:10px"><b>🎤 故事库标题</b></p>
-                    <pre>${escapeHtml(d.stories_preview||'')}</pre>`;
-    st.className='status s-ok';st.textContent='已加载';
-  }catch(e){body.innerHTML=`<div style="color:#c5221f">读取失败：${e.message}</div>`;
-    st.className='status s-err';st.textContent='失败';}
-}
-
-// V2 阶段五：针对 ②JD 调 LLM 生成定制项目段（流式 SSE）
-async function buildResumeForJD(){
-  const jd=document.getElementById('jdInput').value.trim();
-  if(!jd){alert('请先在 ② 卡片粘 JD 或点"从 URL 抽取"');return;}
-  const body=document.getElementById('resumeBody');
-  const st=document.getElementById('resumeStatus');
-  st.className='status s-warn';st.textContent='LLM 生成中...';
-  body.innerHTML='<p><b>🎯 JD 定制项目段（流式输出）</b></p><pre id="resumeStream" style="max-height:420px;overflow:auto;white-space:pre-wrap"></pre>';
-  const streamEl=document.getElementById('resumeStream');
-  try{
-    const r=await fetch('/api/resume/build/stream',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({jd_text:jd})});
-    if(!r.ok) throw new Error('HTTP '+r.status+' '+(await r.text()));
-    const reader=r.body.getReader();
-    const dec=new TextDecoder();
-    let buf='';
-    while(true){
-      const {done,value}=await reader.read();
-      if(done) break;
-      buf+=dec.decode(value,{stream:true});
-      const lines=buf.split('\n');
-      buf=lines.pop();
-      for(const line of lines){
-        if(!line.startsWith('data: ')) continue;
-        const data=line.slice(6);
-        if(data==='[DONE]'){st.className='status s-ok';st.textContent='已生成';return;}
-        try{const c=JSON.parse(data);if(c.text) streamEl.textContent+=c.text;}catch(e){}
-      }
-    }
-    st.className='status s-ok';st.textContent='已生成';
-  }catch(e){body.innerHTML=`<div style="color:#c5221f">生成失败：${e.message}</div>`;
-    st.className='status s-err';st.textContent='失败';}
-}
-
-async function ask(){
-  const q=document.getElementById('askInput').value.trim();
-  const ans=document.getElementById('askAns');
-  if(!q){alert('请输入问题');return;}
-  ans.style.display='block';ans.textContent='思考中...';
-  try{
-    const r=await fetch('/api/query',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,top_k:3})});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    ans.textContent=d.answer||JSON.stringify(d,null,2);
-  }catch(e){ans.textContent='查询失败：'+e.message;}
+// ===== Status =====
+function setStatus(id, kind, text){
+  const el = document.getElementById(id);
+  el.className = 'status-dot' + (kind ? ' ' + kind : '');
+  el.textContent = text;
 }
 
 function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
-// V2 阶段三：今日建议
-async function loadToday(){
-  const head=document.getElementById('todayHeadline');
-  const meta=document.getElementById('todayMeta');
-  head.textContent='加载中…';meta.textContent='';
-  try{
-    const r=await fetch('/api/today');
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    head.textContent=d.headline||'（无建议）';
-    let metaTxt=`来源：${d.source||'-'} · 投递池 ${d.stats?.applications_total||0} 条`;
-    if(d.stats?.last_log_date) metaTxt+=` · 最近日志 ${d.stats.last_log_date}`;
-    meta.textContent=metaTxt;
-    if(d.next_actions && d.next_actions.length){
-      head.title=d.reason+'\n\n下一步：\n• '+d.next_actions.join('\n• ');
-    }
-  }catch(e){head.textContent='加载失败：'+e.message;}
+// ===== Profile =====
+async function loadProfile(){
+  const body = document.getElementById('profBody');
+  body.innerHTML = '<div class="skeleton mid"></div><div class="skeleton short"></div><div class="skeleton"></div>';
+  setStatus('profStatus', 'run', '加载中');
+  try {
+    const r = await fetch('/api/profile');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const dirs = (d.direction||[]).map(x => `<span class="chip accent">${escapeHtml(x)}</span>`).join('');
+    body.innerHTML = `
+      <p><strong>姓名</strong> · ${escapeHtml(d.name||'—')}</p>
+      <p style="margin-top:10px"><strong>目标方向</strong></p>
+      <div class="chip-row">${dirs || '<span class="chip">未填</span>'}</div>
+      <p style="margin-top:10px"><strong>技能摘要</strong></p>
+      <p style="color:var(--text-secondary)">${escapeHtml(d.skills_summary||'—')}</p>
+      <p style="margin-top:10px;font-size:11.5px;color:var(--text-muted)">更新于 ${escapeHtml(d.updated_at||'—')}</p>`;
+    setStatus('profStatus', 'ok', '已加载');
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--error)">加载失败：${escapeHtml(e.message)}</p>`;
+    setStatus('profStatus', 'err', '失败');
+  }
 }
 
-// 自动加载画像 + 近 7 天 + 今日建议
+function loadSampleJD(){ document.getElementById('jdInput').value = SAMPLE_JD; }
+
+// ===== JD discovery =====
+async function doDiscover(){
+  const url = document.getElementById('jdUrl').value.trim();
+  const raw = document.getElementById('jdInput').value.trim();
+  if (!url && !raw) { showToast('请填 URL 或先粘贴 JD 原文'); return; }
+  const body = document.getElementById('matchBody');
+  setStatus('matchStatus', 'run', url ? '渲染中(10-30s)' : '抽取中');
+  body.innerHTML = '<p style="color:var(--text-muted)">' + (url ? '⏳ 启动 Headless Chromium 渲染页面…' : '抽取中…') + '</p>';
+  try {
+    const r = await fetch('/api/discover', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({raw, url})
+    });
+    if (!r.ok) {
+      let detail = '';
+      try { const j = await r.json(); detail = j.detail || ''; } catch(e) { detail = await r.text(); }
+      throw new Error(detail || 'HTTP ' + r.status);
+    }
+    const d = await r.json();
+    document.getElementById('jdInput').value = d.jd_text || raw;
+    body.innerHTML = `
+      <p><strong>${escapeHtml(d.company||'?')}</strong> · ${escapeHtml(d.title||'?')}</p>
+      <p style="color:var(--text-muted);font-size:12px">${escapeHtml(d.location||'?')} · ${escapeHtml(d.job_type||'?')} · 原文 ${d.raw_chars} 字</p>
+      <p style="margin-top:8px"><strong>命中技能</strong></p>
+      <div class="chip-row">${(d.skills_detected||[]).map(s => `<span class="chip">${escapeHtml(s)}</span>`).join('') || '<span class="chip">未命中</span>'}</div>
+      <p style="margin-top:10px;color:var(--success);font-size:12px">✓ 现在可点 "开始匹配"</p>`;
+    setStatus('matchStatus', 'ok', '已抽取');
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--error)">抽取失败：${escapeHtml(e.message)}</p>`;
+    setStatus('matchStatus', 'err', '失败');
+  }
+}
+
+// ===== Match =====
+async function doMatch(){
+  const jd = document.getElementById('jdInput').value.trim();
+  if (!jd) { showToast('请先粘贴 JD'); return; }
+  const body = document.getElementById('matchBody');
+  body.innerHTML = '<div class="skeleton mid"></div><div class="skeleton"></div><div class="skeleton short"></div>';
+  setStatus('matchStatus', 'run', '匹配中');
+  setStatus('gapStatus', 'run', '等待');
+  try {
+    const r = await fetch('/api/match', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({jd_text: jd})
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const kind = d.status === '当前适合投递' ? 'ok' : (d.status === '中长期可转向' ? 'warn' : 'err');
+    body.innerHTML = `
+      <p><strong>结论</strong> <span class="chip ${kind}">${escapeHtml(d.status||'-')}</span> <span class="chip">${escapeHtml(d.direction||'-')}</span></p>
+      <pre>${escapeHtml(d.summary||'')}</pre>`;
+    setStatus('matchStatus', kind, d.status||'完成');
+    renderGaps(d.gap_list||{}, d.suggestions||[]);
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--error)">匹配失败：${escapeHtml(e.message)}</p>`;
+    setStatus('matchStatus', 'err', '失败');
+  }
+}
+
+function renderGaps(gapList, suggestions){
+  const body = document.getElementById('gapBody');
+  let html = '', total = 0, plain = '';
+  for (const [cat, items] of Object.entries(gapList)) {
+    if (!items || !items.length) continue;
+    html += `<p style="margin-top:8px"><strong>${escapeHtml(cat)}</strong> <span class="chip">${items.length}</span></p><ul>`;
+    plain += `【${cat}】\n`;
+    for (const it of items) { html += `<li>${escapeHtml(it)}</li>`; plain += `- ${it}\n`; total++; }
+    html += '</ul>';
+  }
+  if (suggestions && suggestions.length) {
+    html += `<p style="margin-top:14px;color:var(--accent)"><strong>建议</strong></p><ul>`;
+    plain += '\n【建议】\n';
+    for (const s of suggestions) { html += `<li>${escapeHtml(s)}</li>`; plain += `- ${s}\n`; }
+    html += '</ul>';
+  }
+  if (total === 0) {
+    body.innerHTML = `<p style="color:var(--success)">✓ 本次匹配未识别到硬缺口</p>`;
+    setStatus('gapStatus', 'ok', '无缺口');
+    LAST_GAPS_TEXT = '';
+  } else {
+    body.innerHTML = html;
+    setStatus('gapStatus', 'ok', `${total} 条`);
+    LAST_GAPS_TEXT = plain.trim();
+  }
+}
+
+// ===== Plan (SSE) =====
+async function doPlan(useGeneric){
+  const body = document.getElementById('planBody');
+  const gaps = useGeneric ? '' : LAST_GAPS_TEXT;
+  if (!useGeneric && !gaps) {
+    if (!confirm('③ 缺口卡片还没数据，要不要按"通用方向"生成？')) return;
+  }
+  body.innerHTML = '<pre id="planStream" class="cursor"></pre>';
+  const streamEl = document.getElementById('planStream');
+  setStatus('planStatus', 'run', '生成中');
+  try {
+    const r = await fetch('/api/plan/stream', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({gaps: gaps})
+    });
+    if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream:true});
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        try {
+          const c = JSON.parse(data);
+          if (c.text) { streamEl.textContent += c.text; streamEl.scrollTop = streamEl.scrollHeight; }
+          else if (c.done) {
+            streamEl.classList.remove('cursor');
+            body.insertAdjacentHTML('afterbegin', `<p style="color:var(--text-muted);font-size:11.5px">已写入 ${escapeHtml(c.saved_path||'—')}</p>`);
+            setStatus('planStatus', 'ok', '已生成');
+            return;
+          } else if (c.error) { throw new Error(c.error); }
+        } catch (e) { if (e.message !== 'Unexpected end of JSON input') throw e; }
+      }
+    }
+    streamEl.classList.remove('cursor');
+    setStatus('planStatus', 'ok', '完成');
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--error)">规划失败：${escapeHtml(e.message)}</p>`;
+    setStatus('planStatus', 'err', '失败');
+  }
+}
+
+// ===== Daily =====
+async function loadDaily(){
+  const body = document.getElementById('dailyBody');
+  body.innerHTML = '<div class="skeleton"></div><div class="skeleton short"></div>';
+  setStatus('dailyStatus', 'run', '加载中');
+  try {
+    const r = await fetch('/api/daily');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const today = d.today_log
+      ? `<p><strong>今日</strong></p><pre>${escapeHtml(d.today_log)}</pre>`
+      : '<p style="color:var(--text-muted)">今日还没有记录，在上方输入框追加一条</p>';
+    const recent = d.recent_summary
+      ? `<p style="margin-top:12px"><strong>近 ${d.recent_days} 天</strong></p><pre>${escapeHtml(d.recent_summary)}</pre>`
+      : '';
+    body.innerHTML = today + recent;
+    setStatus('dailyStatus', 'ok', '已加载');
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--error)">读取失败：${escapeHtml(e.message)}</p>`;
+    setStatus('dailyStatus', 'err', '失败');
+  }
+}
+
+async function appendDaily(){
+  const inp = document.getElementById('dailyInput');
+  const text = inp.value.trim();
+  if (!text) { showToast('请输入今日记录'); return; }
+  setStatus('dailyStatus', 'run', '写入中');
+  try {
+    const r = await fetch('/api/daily', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text: text})
+    });
+    if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
+    inp.value = '';
+    showToast('✓ 已追加');
+    await loadDaily();
+  } catch (e) {
+    showToast('写入失败：' + e.message);
+    setStatus('dailyStatus', 'err', '失败');
+  }
+}
+
+// ===== Resume =====
+async function loadResume(){
+  const body = document.getElementById('resumeBody');
+  body.innerHTML = '<div class="skeleton"></div><div class="skeleton mid"></div>';
+  setStatus('resumeStatus', 'run', '加载中');
+  try {
+    const r = await fetch('/api/resume');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    body.innerHTML = `
+      <p><strong>resume_pitch.md</strong></p>
+      <pre style="max-height:200px;overflow:auto">${escapeHtml(d.pitch||'')}</pre>
+      <p style="margin-top:12px"><strong>故事库标题</strong></p>
+      <pre>${escapeHtml(d.stories_preview||'')}</pre>`;
+    setStatus('resumeStatus', 'ok', '已加载');
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--error)">读取失败：${escapeHtml(e.message)}</p>`;
+    setStatus('resumeStatus', 'err', '失败');
+  }
+}
+
+async function buildResumeForJD(){
+  const jd = document.getElementById('jdInput').value.trim();
+  if (!jd) { showToast('请先在 ② 卡片粘 JD 或点 URL 抽取'); return; }
+  const body = document.getElementById('resumeBody');
+  body.innerHTML = '<p><strong>JD 定制项目段（SSE 流式）</strong></p><pre id="resumeStream" class="cursor"></pre>';
+  const streamEl = document.getElementById('resumeStream');
+  setStatus('resumeStatus', 'run', '生成中');
+  try {
+    const r = await fetch('/api/resume/build/stream', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({jd_text: jd})
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()));
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream:true});
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') {
+          streamEl.classList.remove('cursor');
+          setStatus('resumeStatus', 'ok', '已生成');
+          return;
+        }
+        try { const c = JSON.parse(data); if (c.text) streamEl.textContent += c.text; } catch(e) {}
+      }
+    }
+    streamEl.classList.remove('cursor');
+    setStatus('resumeStatus', 'ok', '完成');
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--error)">生成失败：${escapeHtml(e.message)}</p>`;
+    setStatus('resumeStatus', 'err', '失败');
+  }
+}
+
+// ===== RAG ask =====
+async function ask(){
+  const q = document.getElementById('askInput').value.trim();
+  const ans = document.getElementById('askAns');
+  const ansBody = document.getElementById('askAnsBody');
+  if (!q) { showToast('请输入问题'); return; }
+  ans.classList.add('show');
+  ansBody.innerHTML = '<div class="skeleton"></div><div class="skeleton mid"></div>';
+  try {
+    const r = await fetch('/api/query', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({query: q, top_k: 3})
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    ansBody.textContent = d.answer || JSON.stringify(d, null, 2);
+  } catch (e) {
+    ansBody.textContent = '查询失败：' + e.message;
+  }
+}
+document.getElementById('askInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') ask();
+});
+
+// ===== Today =====
+async function loadToday(){
+  const head = document.getElementById('todayHeadline');
+  const meta = document.getElementById('todayMeta');
+  head.textContent = '加载中…';
+  meta.textContent = '';
+  try {
+    const r = await fetch('/api/today');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    head.textContent = d.headline || '（无建议）';
+    let metaTxt = `来源 ${d.source||'-'} · 投递池 ${d.stats?.applications_total||0} 条`;
+    if (d.stats?.last_log_date) metaTxt += ` · 最近日志 ${d.stats.last_log_date}`;
+    meta.textContent = metaTxt;
+    if (d.next_actions && d.next_actions.length) {
+      head.title = (d.reason||'') + '\n\n下一步:\n• ' + d.next_actions.join('\n• ');
+    }
+  } catch (e) {
+    head.textContent = '加载失败：' + e.message;
+  }
+}
+
+// ===== Health ping =====
+async function pingHealth(){
+  const el = document.getElementById('apiStatus');
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    el.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success);margin-right:6px"></span>${d.collection_records||0} chunks`;
+  } catch (e) {
+    el.innerHTML = `<span style="color:var(--error)">连接失败</span>`;
+  }
+}
+
+// ===== Boot =====
 loadProfile();
 loadDaily();
 loadToday();
+pingHealth();
 </script>
 </body>
 </html>

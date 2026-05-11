@@ -1,189 +1,596 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="auto">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OfferClaw · 求职流程 Stepper</title>
+<title>OfferClaw · CareerFlow Stepper</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
-       background:#f6f7fb;color:#222;line-height:1.55;padding:24px}
-  header{max-width:1280px;margin:0 auto 20px}
-  h1{font-size:24px;color:#1a73e8;display:flex;align-items:center;gap:10px}
-  h1 .badge{font-size:12px;background:#1a73e8;color:#fff;padding:2px 8px;border-radius:10px;font-weight:400}
-  header .sub{color:#666;font-size:14px;margin-top:6px}
-  header a{color:#1a73e8;text-decoration:none;margin-right:14px;font-size:13px}
-  .toolbar{max-width:1280px;margin:0 auto 16px;background:#fff;border-radius:10px;padding:14px 18px;
-           box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
-  .toolbar textarea{flex:1;min-width:280px;min-height:80px;padding:8px 12px;border:1px solid #d6d8e0;border-radius:6px;font-size:13px;font-family:inherit;resize:vertical}
-  .toolbar input{width:240px;padding:8px 12px;border:1px solid #d6d8e0;border-radius:6px;font-size:14px}
-  .toolbar button{padding:10px 22px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;align-self:center}
-  .toolbar button:hover{background:#1557b0}
-  .toolbar button:disabled{background:#aaa;cursor:wait}
-  .stepper{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-  @media(max-width:780px){.stepper{grid-template-columns:1fr}}
-  .step{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-left:4px solid #ccc}
-  .step.done{border-left-color:#34a853}
-  .step.run{border-left-color:#fbbc04}
-  .step.err{border-left-color:#ea4335}
-  .step h3{font-size:14px;color:#1a73e8;margin-bottom:6px;display:flex;align-items:center;gap:8px}
-  .step h3 .num{display:inline-flex;width:22px;height:22px;background:#1a73e8;color:#fff;border-radius:50%;align-items:center;justify-content:center;font-size:12px}
-  .step .desc{font-size:11px;color:#888;margin-bottom:10px}
-  .step .body{font-size:12px;color:#333;max-height:240px;overflow:auto}
-  .step .body pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;background:#f8f9fb;padding:8px;border-radius:6px}
-  .tag{display:inline-block;background:#e8f0fe;color:#1a73e8;padding:2px 8px;border-radius:10px;font-size:11px;margin:2px 4px 2px 0}
-  .tag.ok{background:#e6f4ea;color:#137333}
-  .tag.warn{background:#fef7e0;color:#a56403}
-  .tag.err{background:#fce8e6;color:#a50e0e}
-  .summary{max-width:1280px;margin:18px auto 0;background:#fff;border-radius:10px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:13px;display:none}
-  .summary.show{display:block}
-  .summary .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}
-  .summary .row:last-child{border-bottom:none}
+  :root {
+    --bg: #FAFAF9;
+    --surface: #FFFFFF;
+    --surface-2: #F5F5F4;
+    --surface-hover: #F0EFEE;
+    --border: #E7E5E4;
+    --border-strong: #D6D3D1;
+    --text: #1C1917;
+    --text-secondary: #57534E;
+    --text-muted: #A8A29E;
+    --accent: #D97757;
+    --accent-hover: #C56342;
+    --accent-soft: #FBEFE9;
+    --success: #10B981;
+    --success-soft: #ECFDF5;
+    --warning: #F59E0B;
+    --warning-soft: #FFFBEB;
+    --error: #EF4444;
+    --error-soft: #FEF2F2;
+    --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.04);
+    --shadow: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+    --shadow-lg: 0 8px 24px rgba(28, 25, 23, 0.08), 0 2px 6px rgba(28, 25, 23, 0.04);
+    --radius-sm: 6px;
+    --radius: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --font-mono: ui-monospace, "SF Mono", Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="auto"] {
+      --bg: #1A1A1A;
+      --surface: #262626;
+      --surface-2: #2D2D2D;
+      --surface-hover: #333333;
+      --border: #404040;
+      --border-strong: #525252;
+      --text: #FAFAF9;
+      --text-secondary: #D4D4D8;
+      --text-muted: #78716C;
+      --accent: #E09975;
+      --accent-hover: #ECAB87;
+      --accent-soft: #3D2920;
+      --success-soft: #064E3B;
+      --warning-soft: #451A03;
+      --error-soft: #450A0A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1A1A1A;
+    --surface: #262626;
+    --surface-2: #2D2D2D;
+    --surface-hover: #333333;
+    --border: #404040;
+    --border-strong: #525252;
+    --text: #FAFAF9;
+    --text-secondary: #D4D4D8;
+    --text-muted: #78716C;
+    --accent: #E09975;
+    --accent-hover: #ECAB87;
+    --accent-soft: #3D2920;
+    --success-soft: #064E3B;
+    --warning-soft: #451A03;
+    --error-soft: #450A0A;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  button { font: inherit; cursor: pointer; }
+  input, textarea { font: inherit; color: inherit; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  pre { font-family: var(--font-mono); font-size: 12.5px; }
+
+  .page { max-width: 980px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  /* ===== Header ===== */
+  .page-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+  .page-mark {
+    width: 38px; height: 38px;
+    border-radius: var(--radius);
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+  }
+  .page-title { font-size: 22px; font-weight: 600; }
+  .page-meta { font-size: 13px; color: var(--text-secondary); margin-top: 4px; margin-bottom: 24px; }
+  .page-meta code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+  .page-nav { display: flex; gap: 16px; margin-bottom: 32px; font-size: 13px; }
+  .page-nav a { color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; }
+  .page-nav a:hover { color: var(--accent); text-decoration: none; }
+  .page-nav a svg { width: 14px; height: 14px; }
+
+  /* ===== Input panel ===== */
+  .input-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 18px;
+    margin-bottom: 28px;
+    box-shadow: var(--shadow-sm);
+  }
+  .input-panel-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .input-panel-head .label {
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; font-size: 11.5px;
+  }
+  .input-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+  textarea.jd {
+    flex: 1;
+    min-width: 280px;
+    min-height: 110px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13.5px;
+    font-family: var(--font-sans);
+    line-height: 1.55;
+    resize: vertical;
+    outline: none;
+    color: var(--text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  textarea.jd:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  input.title {
+    width: 220px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    outline: none;
+    color: var(--text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input.title:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 9px 18px;
+    font-size: 13.5px;
+    font-weight: 500;
+    transition: background 0.12s, transform 0.05s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { background: var(--text-muted); border-color: var(--text-muted); cursor: not-allowed; }
+  .btn.secondary { background: transparent; color: var(--text); border-color: var(--border-strong); }
+  .btn.secondary:hover { background: var(--surface-hover); }
+  .btn svg { width: 14px; height: 14px; }
+
+  /* ===== Stepper ===== */
+  .stepper {
+    position: relative;
+    padding-left: 28px;
+  }
+  /* Connector line behind nodes */
+  .stepper::before {
+    content: '';
+    position: absolute;
+    left: 18px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    background: var(--border);
+  }
+  .step {
+    position: relative;
+    margin-bottom: 14px;
+  }
+  .step-node {
+    position: absolute;
+    left: -28px;
+    top: 16px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--border-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    z-index: 1;
+    transition: border-color 0.2s, background 0.2s, color 0.2s;
+  }
+  .step.run .step-node { border-color: var(--warning); background: var(--warning-soft); color: var(--warning); animation: pulse-ring 1.4s ease-in-out infinite; }
+  .step.done .step-node { border-color: var(--success); background: var(--success); color: #fff; }
+  .step.err .step-node { border-color: var(--error); background: var(--error); color: #fff; }
+  @keyframes pulse-ring {
+    0%, 100% { box-shadow: 0 0 0 0 var(--warning-soft); }
+    50% { box-shadow: 0 0 0 6px var(--warning-soft); }
+  }
+  .step-node svg { width: 12px; height: 12px; }
+
+  .step-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .step:hover .step-card { border-color: var(--border-strong); }
+  .step.done .step-card { border-left: 3px solid var(--success); }
+  .step.err .step-card { border-left: 3px solid var(--error); }
+  .step.run .step-card { border-left: 3px solid var(--warning); }
+
+  .step-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+  .step-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .step-status-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .step.run .step-status-tag { background: var(--warning-soft); color: var(--warning); }
+  .step.done .step-status-tag { background: var(--success-soft); color: var(--success); }
+  .step.err .step-status-tag { background: var(--error-soft); color: var(--error); }
+  .step-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+  .step-body { font-size: 13px; color: var(--text-secondary); }
+  .step-body pre {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 220px;
+    overflow: auto;
+  }
+  .step-body ol { padding-left: 22px; margin-top: 6px; }
+  .step-body ol li { margin: 4px 0; }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    border: 1px solid var(--border);
+    margin: 2px 4px 2px 0;
+  }
+  .chip.ok { background: var(--success-soft); color: var(--success); border-color: transparent; }
+  .chip.warn { background: var(--warning-soft); color: var(--warning); border-color: transparent; }
+  .chip.err { background: var(--error-soft); color: var(--error); border-color: transparent; }
+  .chip.accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+  /* ===== Summary ===== */
+  .summary {
+    margin-top: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 18px 22px;
+    box-shadow: var(--shadow-sm);
+    display: none;
+  }
+  .summary.show { display: block; }
+  .summary-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .summary-head svg { width: 18px; height: 18px; color: var(--accent); }
+  .summary-head .title { font-weight: 600; font-size: 14px; }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 720px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+  .summary-cell {
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+  }
+  .summary-cell .k { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .summary-cell .v { font-size: 18px; font-weight: 600; margin-top: 2px; color: var(--text); }
+
+  /* ===== Theme toggle (fixed corner) ===== */
+  .theme-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 38px; height: 38px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow);
+    color: var(--text-secondary);
+    z-index: 40;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .theme-toggle:hover { border-color: var(--border-strong); color: var(--text); }
+  .theme-toggle svg { width: 18px; height: 18px; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: var(--text);
+    color: var(--bg);
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    box-shadow: var(--shadow-lg);
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
-<header>
-  <h1>OfferClaw <span class="badge">CareerFlow Stepper</span></h1>
-  <div class="sub">8 节点编排：profile → job_input → match → gap → plan → today → resume → application_suggest</div>
-  <div style="margin-top:10px">
-    <a href="/ui">← 返回 6 卡片控制台</a>
-    <a href="/docs">Swagger</a>
-    <a href="/health">Health</a>
-  </div>
-</header>
 
-<div class="toolbar">
-  <textarea id="jd" placeholder="粘贴 JD 原文（公司 / 岗位 / 地点 / 要求 / 职责 ...）— 也可只粘贴关键技术要求几行"></textarea>
-  <input id="title" placeholder="JD 标题（可选）" />
-  <button id="run">运行 CareerFlow</button>
+<div class="page">
+
+  <div class="page-head">
+    <div class="page-mark">OC</div>
+    <div>
+      <div class="page-title">CareerFlow Stepper</div>
+      <div class="page-meta">
+        8 节点 LangGraph 编排：<code>profile → job_input → match → gap → plan → today → resume → application_suggest</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-nav">
+    <a href="/ui">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回工作台
+    </a>
+    <a href="/docs" target="_blank">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Swagger
+    </a>
+    <a href="/health" target="_blank">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      Health
+    </a>
+  </div>
+
+  <!-- Input -->
+  <div class="input-panel">
+    <div class="input-panel-head">
+      <span class="label">输入 JD</span>
+      <span>粘贴公司 / 岗位 / 地点 / 要求 / 职责</span>
+    </div>
+    <div class="input-row">
+      <textarea class="jd" id="jd" placeholder="粘贴一份 JD 原文，或只贴技术要求几行也可以..."></textarea>
+      <input class="title" id="title" placeholder="JD 标题（可选）"/>
+      <button class="btn" id="run">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        运行 CareerFlow
+      </button>
+    </div>
+  </div>
+
+  <!-- Stepper -->
+  <div class="stepper" id="stepper"></div>
+
+  <!-- Summary -->
+  <div class="summary" id="summary"></div>
+
 </div>
 
-<div class="stepper" id="stepper"></div>
+<button class="theme-toggle" id="themeToggle" title="切换主题">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+</button>
 
-<div class="summary" id="summary"></div>
+<div class="toast" id="toast"></div>
 
 <script>
 const STEPS = [
-  {key:"profile", title:"完善画像", desc:"从 user_profile.md 加载 13 字段（无硬编码）"},
-  {key:"job_input", title:"导入 JD", desc:"接收 JD 原文 / discovery 结果"},
-  {key:"match", title:"匹配岗位", desc:"调 match_job → 三档结论 + 缺口清单"},
-  {key:"gap", title:"分析缺口", desc:"按硬技能 / 软技能 / 经验拆分"},
-  {key:"plan", title:"生成 4 周路线", desc:"基于缺口的 plan_outline"},
-  {key:"today", title:"今日执行建议", desc:"career_agent 状态机驱动"},
-  {key:"resume", title:"简历骨架", desc:"skip_llm=True 时只输出框架"},
-  {key:"application_suggest", title:"投递建议", desc:"是否加入 applications.md（待用户确认）"},
+  {key:"profile",             title:"加载用户画像",  desc:"从 user_profile.md 解析 13 字段（含 mtime 缓存）"},
+  {key:"job_input",            title:"导入 JD",       desc:"接收 JD 原文 / discovery 抽取结果"},
+  {key:"match",                title:"规则版匹配",     desc:"调 match_job → 三档结论 + 缺口清单"},
+  {key:"gap",                  title:"分析缺口",       desc:"按 硬技能 / 软技能 / 经历 三类拆分"},
+  {key:"plan",                 title:"4 周计划骨架",   desc:"基于缺口生成可校验的 plan_outline"},
+  {key:"today",                title:"今日执行建议",   desc:"career_agent 状态机驱动 + 本次 JD 上下文"},
+  {key:"resume",               title:"简历骨架",       desc:"skip_llm=True 时仅产关键词命中骨架"},
+  {key:"application_suggest",  title:"投递建议",       desc:"是否加入 applications.md（patch 待用户确认）"},
 ];
+
+function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 function renderInitial(){
   const root = document.getElementById("stepper");
-  root.innerHTML = STEPS.map((s,i)=>`
+  root.innerHTML = STEPS.map((s, i) => `
     <div class="step" id="step-${s.key}">
-      <h3><span class="num">${i+1}</span> ${s.title}</h3>
-      <div class="desc">${s.desc}</div>
-      <div class="body" id="body-${s.key}"><span class="tag">待执行</span></div>
-    </div>`).join("");
+      <div class="step-node" id="node-${s.key}">${i + 1}</div>
+      <div class="step-card">
+        <div class="step-head">
+          <div class="step-title">${s.title}</div>
+          <span class="step-status-tag" id="tag-${s.key}">待执行</span>
+        </div>
+        <div class="step-desc">${s.desc}</div>
+        <div class="step-body" id="body-${s.key}"><span style="color:var(--text-muted)">等待 CareerFlow 启动…</span></div>
+      </div>
+    </div>
+  `).join('');
 }
 
-function setStep(key, status, html){
-  const card = document.getElementById("step-"+key);
+function setStep(key, status, tagText, html){
+  const card = document.getElementById('step-' + key);
+  const tag = document.getElementById('tag-' + key);
+  const node = document.getElementById('node-' + key);
   if (!card) return;
-  card.classList.remove("done","run","err");
-  card.classList.add(status==="done"?"done":status==="err"?"err":"run");
-  document.getElementById("body-"+key).innerHTML = html;
+  card.classList.remove('done', 'run', 'err');
+  if (status) card.classList.add(status);
+  tag.textContent = tagText || '';
+  // Node icon: pending = number, done = check, err = !, run = number
+  if (status === 'done') {
+    node.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  } else if (status === 'err') {
+    node.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  } else {
+    const idx = STEPS.findIndex(s => s.key === key);
+    node.textContent = idx + 1;
+  }
+  document.getElementById('body-' + key).innerHTML = html;
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2200);
 }
 
 async function run(){
-  const jd = document.getElementById("jd").value.trim();
-  const title = document.getElementById("title").value.trim() || "未命名 JD";
-  if (!jd){ alert("请粘贴 JD 原文"); return; }
-  const btn = document.getElementById("run");
-  btn.disabled = true; btn.textContent = "运行中…";
-  document.getElementById("summary").classList.remove("show");
-  STEPS.forEach(s=>setStep(s.key,"run",`<span class="tag warn">运行中…</span>`));
-  try{
-    const r = await fetch("/api/flow/run",{
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({jd_text:jd, jd_title:title, skip_llm:true})
+  const jd = document.getElementById('jd').value.trim();
+  const title = document.getElementById('title').value.trim() || '未命名 JD';
+  if (!jd) { showToast('请粘贴 JD 原文'); return; }
+  const btn = document.getElementById('run');
+  btn.disabled = true;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>运行中…`;
+  document.getElementById('summary').classList.remove('show');
+  STEPS.forEach(s => setStep(s.key, 'run', '运行中', '<span style="color:var(--warning)">执行中…</span>'));
+  try {
+    const r = await fetch('/api/flow/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({jd_text: jd, jd_title: title, skip_llm: true})
     });
-    if(!r.ok) throw new Error("HTTP "+r.status+": "+await r.text());
+    if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + await r.text());
     const d = await r.json();
     renderResults(d);
-  }catch(e){
-    STEPS.forEach(s=>setStep(s.key,"err",`<span class="tag err">${e.message||e}</span>`));
-  }finally{
-    btn.disabled = false; btn.textContent = "运行 CareerFlow";
+  } catch (e) {
+    STEPS.forEach(s => setStep(s.key, 'err', '失败', `<span style="color:var(--error)">${escapeHtml(e.message || e)}</span>`));
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>运行 CareerFlow';
   }
 }
 
 function renderResults(d){
-  const errSet = new Set((d.errors||[]).map(x=>x.node));
-  const trace = new Set((d.trace||[]).map(x=>x.node));
+  const trace = new Set((d.trace || []).map(x => x.node));
 
   // 1 profile
-  const prof = d.match_report?.profile_used || {};
-  setStep("profile", trace.has("profile")?"done":"err",
-    `<div>已加载 profile（来自 user_profile.md）</div>
-     <div style="margin-top:6px">${(d.match_report?.direction||"")?'<span class="tag ok">'+d.match_report.direction+'</span>':''}</div>`);
+  setStep('profile', trace.has('profile') ? 'done' : 'err', trace.has('profile') ? '完成' : '未执行',
+    `<div>已加载 profile（user_profile.md）</div>
+     <div style="margin-top:8px">${d.match_report?.direction ? `<span class="chip accent">${escapeHtml(d.match_report.direction)}</span>` : ''}</div>`);
 
   // 2 job_input
-  setStep("job_input", trace.has("job_input")?"done":"err",
-    `<span class="tag ok">JD 已纳入流程</span>`);
+  setStep('job_input', trace.has('job_input') ? 'done' : 'err', trace.has('job_input') ? '完成' : '未执行',
+    `<span class="chip ok">JD 已纳入流程</span>`);
 
   // 3 match
   const mr = d.match_report || {};
-  const cls = mr.status==="当前适合投递"?"ok":mr.status==="当前暂不建议投递"?"err":"warn";
-  setStep("match", trace.has("match")?"done":"err",
-    `<div><span class="tag ${cls}">${mr.status||"-"}</span>
-       <span class="tag">${mr.direction||"-"}</span></div>
-     <pre style="margin-top:8px">${(mr.summary||"").slice(0,400)}</pre>`);
+  const kind = mr.status === '当前适合投递' ? 'ok' : mr.status === '当前暂不建议投递' ? 'err' : 'warn';
+  setStep('match', trace.has('match') ? 'done' : 'err', trace.has('match') ? '完成' : '未执行',
+    `<div><span class="chip ${kind}">${escapeHtml(mr.status || '-')}</span>
+       <span class="chip">${escapeHtml(mr.direction || '-')}</span></div>
+     <pre>${escapeHtml((mr.summary || '').slice(0, 500))}</pre>`);
 
   // 4 gap
   const gaps = d.gaps || {};
-  const gapTotal = Object.values(gaps).reduce((s,v)=>s+(Array.isArray(v)?v.length:0),0);
-  setStep("gap", trace.has("gap")?"done":"err",
-    `<div>缺口总数：<span class="tag warn">${gapTotal}</span></div>
-     <pre style="margin-top:6px">${JSON.stringify(gaps,null,2).slice(0,500)}</pre>`);
+  const gapTotal = Object.values(gaps).reduce((s, v) => s + (Array.isArray(v) ? v.length : 0), 0);
+  setStep('gap', trace.has('gap') ? 'done' : 'err', trace.has('gap') ? '完成' : '未执行',
+    `<div>缺口总数 <span class="chip warn">${gapTotal}</span></div>
+     <pre>${escapeHtml(JSON.stringify(gaps, null, 2).slice(0, 600))}</pre>`);
 
   // 5 plan
   const plan = d.plan_outline || [];
-  setStep("plan", trace.has("plan")?"done":"err",
-    plan.length ? `<div>${plan.length} 周计划：</div><ol style="padding-left:20px;margin-top:6px">${plan.map(w=>`<li>${w.title||w.week||""}：${(w.focus||w.tasks||"").toString().slice(0,80)}</li>`).join("")}</ol>` : `<span class="tag">无可生成内容</span>`);
+  setStep('plan', trace.has('plan') ? 'done' : 'err', trace.has('plan') ? `${plan.length} 周` : '未执行',
+    plan.length
+      ? `<div>${plan.length} 周计划骨架：</div>
+         <ol>${plan.map(w => `<li><strong>${escapeHtml(String(w.title || w.week || ''))}</strong> · ${escapeHtml(String(w.focus || w.tasks || '').slice(0, 80))}</li>`).join('')}</ol>`
+      : `<span class="chip">无可生成内容</span>`);
 
   // 6 today
   const t = d.today_advice || {};
-  setStep("today", trace.has("today")?"done":"err",
-    `<div><b>${t.headline||""}</b></div>
-     <pre style="margin-top:6px">${(t.detail||t.next_action||"").slice(0,300)}</pre>`);
+  setStep('today', trace.has('today') ? 'done' : 'err', trace.has('today') ? '完成' : '未执行',
+    `<div><strong>${escapeHtml(t.headline || '')}</strong></div>
+     <pre>${escapeHtml((t.detail || t.next_action || '').slice(0, 350))}</pre>`);
 
   // 7 resume
-  const r = d.resume_skeleton || {};
-  setStep("resume", trace.has("resume")?"done":"err",
-    `<div>模式：<span class="tag">${r.mode||"-"}</span>
-       命中关键词：<span class="tag ok">${(r.matched_keywords||[]).length}</span></div>
-     <div style="margin-top:6px">${(r.matched_keywords||[]).slice(0,12).map(k=>`<span class="tag">${k}</span>`).join("")}</div>`);
+  const rs = d.resume_skeleton || {};
+  const keywords = rs.keywords_hit || rs.matched_keywords || [];
+  setStep('resume', trace.has('resume') ? 'done' : 'err', trace.has('resume') ? `${keywords.length} 命中` : '未执行',
+    `<div>模式 <span class="chip">${escapeHtml(rs.mode || '-')}</span>
+       命中关键词 <span class="chip ok">${keywords.length}</span></div>
+     <div style="margin-top:8px">${keywords.slice(0, 16).map(k => `<span class="chip">${escapeHtml(String(k))}</span>`).join('')}</div>`);
 
   // 8 application_suggest
   const a = d.application_suggestion || {};
-  const conf = (d.requires_confirmation||[]).filter(c=>(c.target_file||"").includes("applications.md"));
-  setStep("application_suggest", trace.has("application_suggest")?"done":"err",
-    `<div>决策：<span class="tag ${a.decision&&a.decision.includes("适合")?"ok":"warn"}">${a.decision||"-"}</span></div>
-     <div style="margin-top:6px">待确认 patch：${conf.length}</div>
-     ${conf.length? '<pre style="margin-top:6px">'+JSON.stringify(conf[0],null,2).slice(0,400)+'</pre>':''}`);
+  const conf = (d.requires_confirmation || []).filter(c => (c.target_file || '').includes('applications.md'));
+  const appKind = a.decision && a.decision.includes('适合') ? 'ok' : 'warn';
+  setStep('application_suggest', trace.has('application_suggest') ? 'done' : 'err', trace.has('application_suggest') ? '完成' : '未执行',
+    `<div>决策 <span class="chip ${appKind}">${escapeHtml(a.decision || '-')}</span></div>
+     <div style="margin-top:8px;font-size:12px;color:var(--text-muted)">待确认 patch：${conf.length}</div>
+     ${conf.length ? `<pre>${escapeHtml(JSON.stringify(conf[0], null, 2).slice(0, 500))}</pre>` : ''}`);
 
-  // summary
-  const s = document.getElementById("summary");
-  s.classList.add("show");
+  // Summary
+  const s = document.getElementById('summary');
+  s.classList.add('show');
   s.innerHTML = `
-    <div class="row"><span>trace 节点数</span><b>${(d.trace||[]).length} / 8</b></div>
-    <div class="row"><span>缺口总数</span><b>${gapTotal}</b></div>
-    <div class="row"><span>计划周数</span><b>${plan.length}</b></div>
-    <div class="row"><span>简历命中关键词</span><b>${(r.matched_keywords||[]).length}</b></div>
-    <div class="row"><span>待确认 patch</span><b>${(d.requires_confirmation||[]).length}</b></div>
-    <div class="row"><span>错误数</span><b>${(d.errors||[]).length}</b></div>
-  `;
+    <div class="summary-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span class="title">运行总览</span>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-cell"><div class="k">Trace 节点</div><div class="v">${(d.trace || []).length} / 8</div></div>
+      <div class="summary-cell"><div class="k">缺口总数</div><div class="v">${gapTotal}</div></div>
+      <div class="summary-cell"><div class="k">计划周数</div><div class="v">${plan.length}</div></div>
+      <div class="summary-cell"><div class="k">简历关键词</div><div class="v">${keywords.length}</div></div>
+      <div class="summary-cell"><div class="k">待确认 patch</div><div class="v">${(d.requires_confirmation || []).length}</div></div>
+      <div class="summary-cell"><div class="k">错误数</div><div class="v" style="color:${(d.errors || []).length ? 'var(--error)' : 'var(--success)'}">${(d.errors || []).length}</div></div>
+    </div>`;
 }
 
-document.getElementById("run").addEventListener("click", run);
+document.getElementById('run').addEventListener('click', run);
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const html = document.documentElement;
+  const cur = html.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : (cur === 'light' ? 'auto' : 'dark');
+  html.setAttribute('data-theme', next);
+  showToast(`主题：${next === 'auto' ? '跟随系统' : (next === 'dark' ? '深色' : '浅色')}`);
+});
+
 renderInitial();
 </script>
 </body>
