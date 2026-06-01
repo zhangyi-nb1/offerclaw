@@ -62,13 +62,13 @@ PATTERNS = {
     ],
 }
 
-# 期望（V2 终态）口径——同时也是修复方向
+# 期望（当前 V4 终态）口径——同时也是修复方向
 EXPECTED = {
     "Recall@5": "0.96",
     "MRR": "0.67",
     "cross_doc": "1.00",
     "chunks": "160",
-    "routes": "19",
+    "routes": "28",
     "doctor_ok": "10",
 }
 
@@ -115,7 +115,7 @@ def render_text(table: dict, issues: list[dict]) -> str:
     lines = ["# verify_docs report", ""]
     lines.append("## 各文档采集到的指标值（含历史/基线注释中出现的）")
     lines.append("")
-    headers = ["metric"] + list(table.keys()) + ["expected (V2)"]
+    headers = ["metric"] + list(table.keys()) + ["expected (current)"]
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("|" + "|".join(["---"] * len(headers)) + "|")
     for m in PATTERNS.keys():
@@ -133,7 +133,7 @@ def render_text(table: dict, issues: list[dict]) -> str:
             for tag, hits in it["violations"].items():
                 lines.append(f"    - {tag}: {hits}")
     else:
-        lines.append("## ✅ 所有指标在 4 份文档中均包含 V2 期望值。")
+        lines.append("## ✅ 所有指标在 4 份文档中均包含当前期望值。")
     return "\n".join(lines)
 
 

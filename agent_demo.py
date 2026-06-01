@@ -21,7 +21,7 @@ OfferClaw · Agent Demo · 最小可运行版
     - Web UI / JVS Claw 集成（JVS Claw 用 Prompt 文件直接驱动，不走本脚本）
 
 使用：
-    1. 确认 .env.local 里已有 ZHIPU_API_KEY（day1 已配好）
+    1. 确认 .env.local 里已有 OPENAI_API_KEY（v0.6.3 起，day1 已配好）
     2. 无需 pip install 新依赖（requests 已装）
     3. python agent_demo.py
     4. 提问示例：
@@ -37,67 +37,22 @@ import json
 import time
 import hmac
 import hashlib
-import base64
-
 import requests
 
 from tools import TOOL_FUNCTIONS, TOOLS_SCHEMA
 
-
 # =====================================================
-# Provider 配置（与 day1_api_starter.py 保持一致）
+# Provider 配置 —— 单点配置在 day1_api_starter.py
 # =====================================================
-
-API_BASE = "https://open.bigmodel.cn/api/paas/v4"
-API_KEY_ENV = "ZHIPU_API_KEY"
-MODEL = "glm-4-flash"
-
-
-# =====================================================
-# 本地密钥加载 + 智谱 JWT 签名（从 day1_api_starter.py 复用）
-# =====================================================
-
-def load_local_env(path: str = ".env.local") -> None:
-    """从同目录下的 .env.local 读取 KEY=VALUE 并注入 os.environ。"""
-    if not os.path.exists(path):
-        return
-    with open(path, "r", encoding="utf-8") as f:
-        for raw in f:
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key and key not in os.environ:
-                os.environ[key] = value
-
-
-def build_zhipu_jwt(api_key: str, exp_seconds: int = 3600) -> str:
-    """把智谱复合 API Key 编码为 JWT，用作 Bearer token。"""
-    try:
-        api_key_id, signing_key = api_key.split(".", 1)
-    except ValueError:
-        raise ValueError("智谱 API Key 格式应为 '<api_key_id>.<signing_key>'")
-
-    header = {"alg": "HS256", "sign_type": "SIGN"}
-    now_ms = int(round(time.time() * 1000))
-    payload = {
-        "api_key": api_key_id,
-        "exp": now_ms + exp_seconds * 1000,
-        "timestamp": now_ms,
-    }
-
-    def _b64(obj):
-        raw = json.dumps(obj, separators=(",", ":")).encode("utf-8")
-        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
-
-    h = _b64(header)
-    p = _b64(payload)
-    signing_input = f"{h}.{p}".encode("ascii")
-    sig = hmac.new(signing_key.encode("utf-8"), signing_input, hashlib.sha256).digest()
-    s = base64.urlsafe_b64encode(sig).rstrip(b"=").decode("ascii")
-    return f"{h}.{p}.{s}"
+# v0.6.3 起：chat completions 走 OpenAI 兼容代理（gpt-5.4 + medium effort）。
+# 所有 provider 切换在 .env.local + day1_api_starter.get_llm_config()
+# 一处完成，这里只复用。
+from day1_api_starter import (  # noqa: E402
+    API_KEY_ENV,
+    build_zhipu_jwt,
+    get_llm_config,
+    load_local_env,
+)
 
 
 # =====================================================
@@ -164,25 +119,32 @@ def call_llm(messages, api_key, tools=None):
     """发送一次 chat completion 请求，返回解析后的 JSON dict。
 
     messages : list[dict]   —— 对话历史，符合 OpenAI chat 格式
-    api_key  : str          —— 智谱 API Key
+    api_key  : str          —— Bearer 用的 API Key（Zhipu 路径会自动 JWT 化）
     tools    : list[dict]   —— 可选的 tools schema
     """
-    bearer_token = build_zhipu_jwt(api_key)
-    url = f"{API_BASE}/chat/completions"
+    cfg = get_llm_config()
+    if cfg["is_zhipu"]:
+        bearer_token = build_zhipu_jwt(api_key)
+    else:
+        bearer_token = api_key
+
+    url = f"{cfg['api_base']}/chat/completions"
     headers = {
         "Authorization": f"Bearer {bearer_token}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": MODEL,
+    payload: dict = {
+        "model": cfg["model"],
         "messages": messages,
         # Agent 需要工具调用决策稳定，temperature 调低
         "temperature": 0.2,
     }
+    if cfg["reasoning_effort"]:
+        payload["reasoning_effort"] = cfg["reasoning_effort"]
     if tools:
         payload["tools"] = tools
 
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    response = requests.post(url, headers=headers, json=payload, timeout=cfg["timeout"])
     response.raise_for_status()
     return response.json()
 
@@ -282,15 +244,16 @@ def main():
 
     # 加载密钥
     load_local_env()
-    api_key = os.environ.get(API_KEY_ENV)
+    cfg = get_llm_config()
+    api_key = cfg["api_key"]
     if not api_key:
         print(f"[ERROR] 未检测到环境变量 {API_KEY_ENV}")
-        print("请确认 .env.local 里有一行：ZHIPU_API_KEY=你的密钥")
+        print(f"请确认 .env.local 里有一行：{API_KEY_ENV}=你的密钥")
         sys.exit(1)
 
     print("=" * 60)
     print("OfferClaw · Agent Demo · V2（含 profile 查询 + 跨会话 memory）")
-    print(f"Model    : {MODEL}")
+    print(f"Model    : {cfg['model']} (effort={cfg['reasoning_effort'] or '-'})")
     print(f"Tools    : {', '.join(TOOL_FUNCTIONS.keys())}")
     print(f"Memory   : {MEMORY_PATH}（启动恢复 / 退出保存）")
     print("命令     : /clear 清空 memory · /save 立即保存 · /history 看条数 · quit 退出")

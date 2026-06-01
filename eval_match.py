@@ -132,10 +132,17 @@ gap_total = {gap_total}
 
 
 def llm_judge_one(profile: dict, jd_text: str, baseline: dict) -> dict:
-    """单条 LLM 二次审视。失败时返回 {error: ...}，不抛异常。"""
-    key = os.environ.get("ZHIPU_API_KEY", "").strip()
-    if not key:
-        return {"error": "no_key", "score": None}
+    """单条 LLM 二次审视。失败时返回 {error: ...}，不抛异常。
+
+    v0.6.3 起走 OpenAI 兼容代理（gpt-5.4 + medium effort）。
+    """
+    from day1_api_starter import API_KEY_ENV, build_zhipu_jwt, get_llm_config
+
+    cfg = get_llm_config()
+    api_key = cfg["api_key"]
+    if not api_key:
+        return {"error": f"no_{API_KEY_ENV.lower()}", "score": None}
+    bearer = build_zhipu_jwt(api_key) if cfg["is_zhipu"] else api_key
 
     profile_simple = {k: profile.get(k) for k in (
         "学历", "专业", "所在地", "可接受地域", "方向优先级",
@@ -149,16 +156,21 @@ def llm_judge_one(profile: dict, jd_text: str, baseline: dict) -> dict:
     )
     try:
         import requests as _r
+        body: dict = {
+            "model": cfg["model"],
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+        }
+        if cfg["reasoning_effort"]:
+            body["reasoning_effort"] = cfg["reasoning_effort"]
         resp = _r.post(
-            "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-            headers={"Authorization": f"Bearer {key}",
-                     "Content-Type": "application/json"},
-            json={
-                "model": "glm-4-flash",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
+            f"{cfg['api_base']}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {bearer}",
+                "Content-Type": "application/json",
             },
-            timeout=20,
+            json=body,
+            timeout=cfg["timeout"],
         )
         resp.raise_for_status()
         txt = resp.json()["choices"][0]["message"]["content"].strip()

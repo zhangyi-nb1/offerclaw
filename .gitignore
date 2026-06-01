@@ -15,6 +15,9 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+# ===== macOS 本地文件 =====
+.DS_Store
+
 # ===== 虚拟环境 =====
 .venv/
 venv/

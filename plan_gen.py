@@ -32,11 +32,10 @@ import sys
 
 import requests
 
-from agent_demo import (
-    API_BASE,
+from day1_api_starter import (
     API_KEY_ENV,
-    MODEL,
     build_zhipu_jwt,
+    get_llm_config,
     load_local_env,
 )
 
@@ -97,19 +96,21 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
 
 
 def call_llm_plain(messages, api_key, max_tokens: int = 4000) -> str:
-    """调用智谱 LLM，不带 tools（规划是单次纯文本生成）。"""
-    bearer = build_zhipu_jwt(api_key)
-    url = f"{API_BASE}/chat/completions"
+    """调用 LLM，不带 tools（规划是单次纯文本生成）。"""
+    cfg = _resolve_chat_config(api_key)
+    url = f"{cfg['api_base']}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {bearer}",
+        "Authorization": f"Bearer {cfg['bearer']}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": MODEL,
+        "model": cfg["model"],
         "messages": messages,
         "temperature": 0.3,
         "max_tokens": max_tokens,
     }
+    if cfg.get("reasoning_effort"):
+        payload["reasoning_effort"] = cfg["reasoning_effort"]
     resp = requests.post(url, headers=headers, json=payload, timeout=120)
     resp.raise_for_status()
     data = resp.json()
@@ -117,21 +118,23 @@ def call_llm_plain(messages, api_key, max_tokens: int = 4000) -> str:
 
 
 def call_llm_stream(messages, api_key, max_tokens: int = 4000):
-    """调用智谱 LLM，stream=True，逐 token yield str。供 SSE 端点消费。"""
+    """调用 LLM，stream=True，逐 token yield str。供 SSE 端点消费。"""
     import json as _json
-    bearer = build_zhipu_jwt(api_key)
-    url = f"{API_BASE}/chat/completions"
+    cfg = _resolve_chat_config(api_key)
+    url = f"{cfg['api_base']}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {bearer}",
+        "Authorization": f"Bearer {cfg['bearer']}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": MODEL,
+        "model": cfg["model"],
         "messages": messages,
         "temperature": 0.3,
         "max_tokens": max_tokens,
         "stream": True,
     }
+    if cfg.get("reasoning_effort"):
+        payload["reasoning_effort"] = cfg["reasoning_effort"]
     with requests.post(url, headers=headers, json=payload, timeout=120, stream=True) as resp:
         resp.raise_for_status()
         for line in resp.iter_lines():
@@ -150,6 +153,21 @@ def call_llm_stream(messages, api_key, max_tokens: int = 4000):
                         yield delta
                 except Exception:
                     pass
+
+
+def _resolve_chat_config(api_key: str) -> dict:
+    """Resolve chat endpoint/auth for both current proxy and legacy Zhipu callers."""
+    cfg = get_llm_config()
+    zhipu_key = os.environ.get("ZHIPU_API_KEY", "")
+    if api_key and api_key == zhipu_key:
+        return {
+            "api_base": "https://open.bigmodel.cn/api/paas/v4",
+            "model": "glm-4-flash",
+            "bearer": build_zhipu_jwt(api_key),
+            "reasoning_effort": "",
+        }
+    bearer = build_zhipu_jwt(api_key) if cfg["is_zhipu"] else api_key
+    return {**cfg, "bearer": bearer}
 
 
 def save_plan(content: str) -> str:

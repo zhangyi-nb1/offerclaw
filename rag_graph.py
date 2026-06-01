@@ -276,22 +276,34 @@ def node_call_llm(state: AgentState) -> dict:
     """
     节点 3：调用 LLM
     传入 tools，LLM 可能返回工具调用。
+
+    v0.6.3 起走 OpenAI 兼容代理（gpt-5.4 + medium effort）。
     """
+    from day1_api_starter import build_zhipu_jwt, get_llm_config
+
+    cfg = get_llm_config()
+    bearer = build_zhipu_jwt(cfg["api_key"]) if cfg["is_zhipu"] else cfg["api_key"]
+
     messages = [_msg_to_dict(m) for m in state["messages"]]
 
-    token = generate_zhipu_token()
+    body: dict = {
+        "model": cfg["model"],
+        "messages": messages,
+        "tools": TOOLS,
+        "tool_choice": "auto",
+    }
+    if cfg["reasoning_effort"]:
+        body["reasoning_effort"] = cfg["reasoning_effort"]
 
     import requests
     resp = requests.post(
-        "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "model": LLM_MODEL,
-            "messages": messages,
-            "tools": TOOLS,
-            "tool_choice": "auto",
+        f"{cfg['api_base']}/chat/completions",
+        headers={
+            "Authorization": f"Bearer {bearer}",
+            "Content-Type": "application/json",
         },
-        timeout=60,
+        json=body,
+        timeout=cfg["timeout"],
     )
     resp.raise_for_status()
     data = resp.json()

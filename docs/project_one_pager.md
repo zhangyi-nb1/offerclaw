@@ -34,7 +34,7 @@
 ## 5. 核心模块
 - **match_job.py** — 规则 + LLM 双通路岗位匹配（硬否决在规则层，软评估在 LLM 层）
 - **rag_graph.py** — LangGraph 工作流：retrieve → rerank → answer，带显式 State
-- **rag_api.py** — 19 个 FastAPI 路由（13 核心业务 + 6 辅助/系统）+ JSON 日志 + request_id 中间件
+- **rag_api.py** — 28 个 FastAPI 路由（含 V4 agent / trace / traced flow）+ JSON 日志 + request_id 中间件
 - **tools.py** — 6 个 Agent 工具：profile / rules / log / plan / match / summary
 - **eval_rag.py** — Recall@K + MRR + 桶级指标 + baseline 回归（自建 50 题 3 桶集）
 - **static/index.html** — 零依赖前端控制台
@@ -47,7 +47,7 @@ Python 3.13 · FastAPI · LangGraph · ChromaDB · 智谱 GLM-4 / embedding-3 ·
 |---|---|
 | 测试用例 | **37/37** 通过（+3 e2e skip，需 OFFERCLAW_E2E=1） |
 | RAG 召回（自建 50 题 3 桶集） | Recall@5 = **0.96** · cross_doc = **1.00** · MRR = **0.67** |
-| FastAPI 路由 | **19**（13 核心业务 + 6 辅助/系统，含 2 条 SSE 流式） |
+| FastAPI 路由 | **28**（V3 基线 24 + V4 新增 4，含 SSE 流式） |
 | Persona 回归 | 3 personas × multi-JD，结论差异化，见 `docs/persona_compare_report.md` |
 | 知识库 | **160 chunks**（8 类 source_type 元数据） |
 | 工程自检 | doctor **10 OK**（auto-load `.env.local`）· verify_pipeline 6/6 · verify_docs all green |

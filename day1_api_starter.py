@@ -7,64 +7,62 @@ OfferClaw · Day 1 Task 1 · LLM API 调用最小可运行脚本
     这是所有 LLM 应用和 Agent 项目的第一块积木。
     本脚本本身也会作为 Day 2 做 Agent Demo 的代码底座。
 
+v0.6.3 (2026-05) 起：
+    默认 provider 从智谱 GLM-4-Flash 切到 **OpenAI 兼容代理**
+    （订阅中转站把 ChatGPT 账号包装成 OpenAI API）。
+    模型 ``gpt-5.4``，reasoning_effort ``medium``。
+    Embeddings 仍走智谱（代理不支持 embeddings）—— 见
+    rag_tools.py 和 .env.local 的 ZHIPU_API_KEY。
+
 使用步骤：
-    1. 注册一个国内大模型 API 账号（推荐 DeepSeek，注册后有免费额度）：
-       - DeepSeek：https://platform.deepseek.com/
-       - 备选 · 智谱 GLM（glm-4-flash 有长期免费额度）：https://open.bigmodel.cn/
-       - 备选 · Moonshot Kimi：https://platform.moonshot.cn/
-
-    2. 在平台的 "API Keys" 页面创建一个密钥（格式形如 sk-xxxx）。
-
-    3. 把密钥设置为环境变量，避免硬编码进代码：
-       - PowerShell：$env:DEEPSEEK_API_KEY = "sk-你的密钥"
-       - CMD：      set DEEPSEEK_API_KEY=sk-你的密钥
-       - Git Bash：export DEEPSEEK_API_KEY="sk-你的密钥"
-
-    4. 安装唯一的第三方依赖：
-         pip install requests
-
-    5. 运行：
-         python day1_api_starter.py
+    1. 把 ``.env.local`` 里的 ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` 设好。
+    2. 安装唯一的第三方依赖：``pip install requests``
+    3. 运行：``python day1_api_starter.py``
 
 成功标志：
     控制台打印一段完整的 LLM 响应文本 + token usage 统计。
-    这意味着 Python -> API 全链路通了，Day 2 可以在此基础上加"工具调用"
-    变成最小 Agent Demo。
 """
 
+import base64
+import hashlib
+import hmac
+import json
 import os
 import sys
-import json
 import time
-import hmac
-import hashlib
-import base64
+
 import requests
 
-
 # =====================================================
-# Provider 配置 —— 想换 Provider 只改这 3 个常量
+# Provider 配置 —— 想换 Provider 只改这几个常量（或改 .env.local 覆盖）
 # =====================================================
 
-# 默认：智谱 GLM-4-Flash（长期免费额度，OpenAI 兼容接口）
-API_BASE = "https://open.bigmodel.cn/api/paas/v4"
-API_KEY_ENV = "ZHIPU_API_KEY"
-MODEL = "glm-4-flash"
+# 默认：本机 OpenAI 兼容代理（订阅账号中转，gpt-5.4 + medium effort）
+DEFAULT_API_BASE = "http://127.0.0.1:8080/v1"
+DEFAULT_MODEL = "gpt-5.4"
+DEFAULT_REASONING_EFFORT = "medium"
+DEFAULT_TIMEOUT = 60.0
 
-# 备选 · DeepSeek：
-# API_BASE = "https://api.deepseek.com/v1"
-# API_KEY_ENV = "DEEPSEEK_API_KEY"
-# MODEL = "deepseek-chat"
-#
-# 备选 · Moonshot Kimi：
-# API_BASE = "https://api.moonshot.cn/v1"
-# API_KEY_ENV = "MOONSHOT_API_KEY"
-# MODEL = "moonshot-v1-8k"
+API_KEY_ENV = "OPENAI_API_KEY"
+
+# 从 .env.local 或 shell 环境覆盖（env 优先级 > 这里的 default）
+def _resolved(envvar: str, default: str) -> str:
+    """``os.environ.get`` with a non-empty default fallback."""
+    value = os.environ.get(envvar, "").strip()
+    return value if value else default
+
+
+# 备选 · 智谱 GLM（如果想切回旧路径，把下面 4 行解注释、注释掉上面的 OpenAI 默认即可）：
+# DEFAULT_API_BASE = "https://open.bigmodel.cn/api/paas/v4"
+# DEFAULT_MODEL = "glm-4-flash"
+# DEFAULT_REASONING_EFFORT = ""  # 智谱不支持 reasoning_effort
+# API_KEY_ENV = "ZHIPU_API_KEY"
 
 
 # =====================================================
 # 本地密钥加载（从 .env.local 读）
 # =====================================================
+
 
 def load_local_env(path: str = ".env.local") -> None:
     """从同目录下的 .env.local 读取 KEY=VALUE 并注入 os.environ。
@@ -92,31 +90,24 @@ def load_local_env(path: str = ".env.local") -> None:
 
 
 # =====================================================
-# 智谱 JWT 签名（仅智谱 provider 需要）
+# 智谱 JWT 签名（旧路径备用，OpenAI 兼容代理不需要）
 # =====================================================
+
 
 def build_zhipu_jwt(api_key: str, exp_seconds: int = 3600) -> str:
     """把智谱复合 API Key 编码为 JWT，用作 Bearer token。
 
-    智谱的 API Key 形如 `<api_key_id>.<signing_key>`（用 '.' 分隔）。
+    智谱的 API Key 形如 ``<api_key_id>.<signing_key>``（用 '.' 分隔）。
     官方规范是把它拆开、构造 JWT、用 signing_key 做 HS256 签名。
     参考：https://bigmodel.cn/dev/api/http-auth#jwt-auth
 
-    本函数不依赖 PyJWT，只用 Python 标准库实现。
-
-    参数：
-        api_key      —— 完整的智谱复合密钥
-        exp_seconds  —— JWT 过期时间（秒），默认 1 小时
-
-    返回：
-        可直接放进 "Authorization: Bearer <...>" 头里的 JWT 字符串
+    v0.6.3 起默认走 OpenAI 兼容代理（直接用 raw API key 做 Bearer），
+    这个函数保留供旧 Zhipu 路径或 embeddings 调用复用。
     """
     try:
         api_key_id, signing_key = api_key.split(".", 1)
     except ValueError:
-        raise ValueError(
-            "智谱 API Key 格式应为 '<api_key_id>.<signing_key>'，请检查 .env.local"
-        )
+        raise ValueError("智谱 API Key 格式应为 '<api_key_id>.<signing_key>'，请检查 .env.local")
 
     header = {"alg": "HS256", "sign_type": "SIGN"}
     now_ms = int(round(time.time() * 1000))
@@ -127,7 +118,6 @@ def build_zhipu_jwt(api_key: str, exp_seconds: int = 3600) -> str:
     }
 
     def _b64(obj: dict) -> str:
-        """紧凑 JSON 序列化 + URL-safe base64 编码 + 去尾部 '=' 填充。"""
         raw = json.dumps(obj, separators=(",", ":")).encode("utf-8")
         return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
@@ -145,55 +135,91 @@ def build_zhipu_jwt(api_key: str, exp_seconds: int = 3600) -> str:
 
 
 # =====================================================
+# 资源解析器 —— 供其他脚本复用
+# =====================================================
+
+
+def get_llm_config() -> dict:
+    """读取当前激活的 LLM 配置（env 优先）。
+
+    所有 chat-completion 调用都应该走这里，避免每个脚本各自硬编码。
+    """
+    return {
+        "api_base": _resolved("OPENAI_BASE_URL", DEFAULT_API_BASE),
+        "model": _resolved("LLM_MODEL", DEFAULT_MODEL),
+        "reasoning_effort": _resolved("LLM_REASONING_EFFORT", DEFAULT_REASONING_EFFORT),
+        "timeout": float(_resolved("LLM_TIMEOUT", str(DEFAULT_TIMEOUT))),
+        "api_key": os.environ.get(API_KEY_ENV, ""),
+        "api_key_env": API_KEY_ENV,
+        # Legacy compat for the 智谱 / glm flow
+        "is_zhipu": "bigmodel" in _resolved("OPENAI_BASE_URL", DEFAULT_API_BASE).lower(),
+    }
+
+
+# Backwards-compat: existing imports `from day1_api_starter import API_BASE, MODEL`
+# still work. They snap to current env at import time.
+API_BASE = _resolved("OPENAI_BASE_URL", DEFAULT_API_BASE)
+MODEL = _resolved("LLM_MODEL", DEFAULT_MODEL)
+
+
+# =====================================================
 # 最小请求函数
 # =====================================================
 
-def call_llm(prompt: str, api_key: str) -> dict:
+
+def call_llm(prompt: str, api_key: str, *, system: str | None = None) -> dict:
     """发送一次 chat completion 请求，返回解析后的 JSON dict。
 
+    使用当前 :func:`get_llm_config` 的配置（OpenAI 兼容代理 + gpt-5.4 +
+    reasoning_effort medium 是默认）。
+
     参数：
-        prompt   —— 用户输入的提问文本
-        api_key  —— 通过环境变量读入的 API 密钥
+        prompt  —— 用户输入的提问文本
+        api_key —— Bearer token 用的 API 密钥（OpenAI 路径用 raw；
+                   Zhipu 路径会自动 JWT 化）
+        system  —— 可选 system 消息；默认是一个简洁助手 prompt
 
     返回：
         整个 JSON 响应对象（含 choices / usage / id 等）
 
     可能抛出：
-        requests.HTTPError —— HTTP 状态码非 2xx（通常是密钥错 / 余额不足）
-        json.JSONDecodeError —— 响应不是合法 JSON（极少见）
+        requests.HTTPError —— HTTP 非 2xx
+        json.JSONDecodeError —— 响应不是合法 JSON
     """
-    # 智谱 provider 的 Bearer token 必须是 JWT，不能是 raw key
-    # 其他 provider（DeepSeek / Moonshot）直接用 raw key
-    if "open.bigmodel.cn" in API_BASE:
+    cfg = get_llm_config()
+    if cfg["is_zhipu"]:
         bearer_token = build_zhipu_jwt(api_key)
     else:
         bearer_token = api_key
 
-    url = f"{API_BASE}/chat/completions"
+    url = f"{cfg['api_base']}/chat/completions"
     headers = {
         "Authorization": f"Bearer {bearer_token}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": "你是一个严谨的技术助手，回答直接、不废话。"},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.8,  # 0.0-1.0，越高越发散（可选，默认值因 provider 而异）
-    }
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    else:
+        messages.append({"role": "system", "content": "你是一个严谨的技术助手，回答直接、不废话。"})
+    messages.append({"role": "user", "content": prompt})
 
-    # timeout 设 30 秒是为了防止 LLM 长时间挂起阻塞脚本
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    response.raise_for_status()  # 非 2xx 抛 HTTPError
+    payload: dict = {
+        "model": cfg["model"],
+        "messages": messages,
+    }
+    # Reasoning effort —— gpt-5.x 系列特性；OpenAI 兼容代理支持。
+    # 智谱 / 普通 chat model 不认这个字段就忽略（多数代理会优雅丢弃）。
+    if cfg["reasoning_effort"]:
+        payload["reasoning_effort"] = cfg["reasoning_effort"]
+
+    response = requests.post(url, headers=headers, json=payload, timeout=cfg["timeout"])
+    response.raise_for_status()
     return response.json()
 
 
 def extract_reply(data: dict) -> str:
-    """从响应 JSON 里提取 LLM 的文本回复。
-
-    OpenAI 兼容接口的标准路径是 choices[0].message.content。
-    """
+    """从响应 JSON 里提取 LLM 的文本回复。"""
     return data["choices"][0]["message"]["content"]
 
 
@@ -201,39 +227,37 @@ def extract_reply(data: dict) -> str:
 # 主入口
 # =====================================================
 
+
 def main():
-    # Windows 控制台默认 GBK 编码，LLM 返回含表情/特殊字符时会炸，切 UTF-8
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
 
-    # 0. 先尝试从 .env.local 加载本地密钥（如果文件存在）
     load_local_env()
+    cfg = get_llm_config()
 
-    # 1. 读取 API Key
-    api_key = os.environ.get(API_KEY_ENV)
+    api_key = cfg["api_key"]
     if not api_key:
-        print(f"[ERROR] 未检测到环境变量 {API_KEY_ENV}")
+        print(f"[ERROR] 未检测到环境变量 {cfg['api_key_env']}")
         print()
         print("有两种设置方式：")
-        print(f"  A. 在 .env.local 文件里加一行：{API_KEY_ENV}=你的密钥")
+        print(f"  A. 在 .env.local 文件里加一行：{cfg['api_key_env']}=你的密钥")
         print(f"  B. 在当前终端临时设置：")
-        print(f"     PowerShell: $env:{API_KEY_ENV} = '你的密钥'")
-        print(f"     CMD:        set {API_KEY_ENV}=你的密钥")
+        print(f"     PowerShell: $env:{cfg['api_key_env']} = '你的密钥'")
+        print(f"     CMD:        set {cfg['api_key_env']}=你的密钥")
         sys.exit(1)
 
-    # 2. 构造一个简单的测试 prompt
     prompt = "我想去洗车，但洗车行离我很近，那我是走过去还是开车过去？"
 
-    # 3. 打印请求上下文（方便排查）
-    print(f"[INFO] Provider : {API_BASE}")
-    print(f"[INFO] Model    : {MODEL}")
-    print(f"[INFO] Prompt   : {prompt}")
+    print(f"[INFO] Provider         : {cfg['api_base']}")
+    print(f"[INFO] Model            : {cfg['model']}")
+    if cfg["reasoning_effort"]:
+        print(f"[INFO] Reasoning effort : {cfg['reasoning_effort']}")
+    print(f"[INFO] Prompt           : {prompt}")
     print("[INFO] 正在发送请求...")
     print()
 
-    # 4. 发送请求 + 异常分类处理
     try:
         data = call_llm(prompt, api_key)
         print(json.dumps(data, ensure_ascii=False, indent=2))
@@ -252,13 +276,13 @@ def main():
         print(f"响应体：{e.response.text if e.response is not None else 'N/A'}")
         print()
         print("常见原因：")
-        print("  - API Key 错误（检查环境变量是否设置正确）")
-        print("  - 账户余额不足 / 未激活")
-        print("  - 模型名称不对（检查 MODEL 常量）")
+        print(f"  - API Key 错误（检查 {cfg['api_key_env']}）")
+        print(f"  - 模型名称代理不支持（当前 model={cfg['model']}；试试 gpt-5.4-mini）")
+        print(f"  - 代理 endpoint 不通（当前 base={cfg['api_base']}）")
         sys.exit(1)
 
     except requests.Timeout:
-        print("[TIMEOUT] 请求超过 30 秒未响应，检查网络连接")
+        print(f"[TIMEOUT] 请求超过 {cfg['timeout']} 秒未响应，检查网络连接")
         sys.exit(1)
 
     except KeyError as e:
@@ -273,4 +297,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

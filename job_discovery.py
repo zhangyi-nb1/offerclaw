@@ -139,10 +139,13 @@ def _strip_html(html: str) -> str:
 
 
 def _fetch_with_playwright(url: str, timeout_ms: int = 30000) -> str:
-    """用 Playwright 无头 Chromium 渲染页面，返回可读正文。"""
+    """用 Playwright 渲染页面，优先调用本机 Chrome，失败再用 bundled Chromium。"""
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
+        try:
+            browser = pw.chromium.launch(channel="chrome", headless=True)
+        except Exception:
+            browser = pw.chromium.launch(headless=True)
         ctx = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",

@@ -13,8 +13,8 @@
   1. 交付 OpenClaw 养成挑战赛
   2. 2026-05-01 前成长为可写进简历的 AI 应用 / Agent 项目
 - **最终形态**：适用于各类用户形象的通用智能体（当前用项目作者做训练验证）
-- **状态更新时间**：2026-05-01
-- **版本**：**V3 收口审计完成**（产品级 Agent 原型 + 一致性闭环：8 节点 CareerFlow / 24 路由对齐 / DEMO_PROFILE 0 生产耦合 / pytest 64-64 / skip_llm 无 KEY 跑通）
+- **状态更新时间**：2026-06-01
+- **版本**：**V4 本地环境收口完成**（28 路由 / pytest 130-130 / verify_pipeline 6-6 / V4 Tool + Trace + Memory 模块就绪）
 
 ## V2 收口完成（当前）
 
@@ -22,7 +22,7 @@
 |---|---|
 | 8 个 Career-Ops 优化阶段 | ✅ 8/8 全部完成 |
 | RAG 指标（160 chunks） | ✅ Recall@5=0.96 · cross_doc=1.00 · MRR=0.67 |
-| FastAPI 接口 | ✅ 19 路由（13 核心业务 + 6 辅助/系统，含 2 条 SSE） |
+| FastAPI 接口 | ✅ 28 路由（V3 基线 24 + V4 新增 agent / trace / traced flow 等 4 条） |
 | UI 控制台 | ✅ 6 卡片 + 今日建议横条 |
 | JD 发现 | ✅ Playwright SPA 自动渲染 |
 | 简历生成 | ✅ SSE 流式 JD 定制项目段 |

@@ -21,7 +21,7 @@ import sys
 
 import requests
 
-from agent_demo import API_BASE, API_KEY_ENV, MODEL, build_zhipu_jwt, load_local_env
+from day1_api_starter import API_KEY_ENV, build_zhipu_jwt, get_llm_config, load_local_env
 
 DAILY_LOG_PATH = "daily_log.md"
 SUMMARY_PROMPT_PATH = "summary_prompt.md"
@@ -83,15 +83,38 @@ def build_messages(prompt: str, source_policy: str, target_rules: str,
 
 
 def call_llm(messages, api_key) -> str:
-    bearer = build_zhipu_jwt(api_key)
+    cfg = _resolve_chat_config(api_key)
+    payload = {
+        "model": cfg["model"],
+        "messages": messages,
+        "temperature": 0.3,
+        "max_tokens": 3000,
+    }
+    if cfg.get("reasoning_effort"):
+        payload["reasoning_effort"] = cfg["reasoning_effort"]
     resp = requests.post(
-        f"{API_BASE}/chat/completions",
-        headers={"Authorization": f"Bearer {bearer}", "Content-Type": "application/json"},
-        json={"model": MODEL, "messages": messages, "temperature": 0.3, "max_tokens": 3000},
+        f"{cfg['api_base']}/chat/completions",
+        headers={"Authorization": f"Bearer {cfg['bearer']}", "Content-Type": "application/json"},
+        json=payload,
         timeout=120,
     )
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"].get("content", "") or ""
+
+
+def _resolve_chat_config(api_key: str) -> dict:
+    """Resolve chat endpoint/auth for both current proxy and legacy Zhipu callers."""
+    cfg = get_llm_config()
+    zhipu_key = os.environ.get("ZHIPU_API_KEY", "")
+    if api_key and api_key == zhipu_key:
+        return {
+            "api_base": "https://open.bigmodel.cn/api/paas/v4",
+            "model": "glm-4-flash",
+            "bearer": build_zhipu_jwt(api_key),
+            "reasoning_effort": "",
+        }
+    bearer = build_zhipu_jwt(api_key) if cfg["is_zhipu"] else api_key
+    return {**cfg, "bearer": bearer}
 
 
 def save(content: str, mode: str, date_str: str) -> str:

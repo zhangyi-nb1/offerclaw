@@ -157,12 +157,23 @@ _SYSTEM_PROMPT = """你是 OfferClaw 的求职作战助手。
 
 
 def _llm_step(msg: str, registry: ToolRegistry, max_steps: int = 3) -> dict:
-    """LLM 模式：失败时无缝降级到 deterministic。"""
-    key = os.environ.get("ZHIPU_API_KEY", "").strip()
-    if not key:
+    """LLM 模式：失败时无缝降级到 deterministic.
+
+    v0.6.3 起走 OpenAI 兼容代理 (gpt-5.4 + medium effort)。
+    实际通路集中在 ``day1_api_starter.get_llm_config()``。
+    """
+    # Local import to avoid a circular at module load if day1 itself
+    # ever imports react_agent helpers.
+    from day1_api_starter import API_KEY_ENV, build_zhipu_jwt, get_llm_config
+
+    cfg = get_llm_config()
+    api_key = cfg["api_key"]
+    if not api_key:
         out = _deterministic_step(msg, registry)
-        out["errors"].append("no_zhipu_key:fallback_to_deterministic")
+        out["errors"].append(f"no_{API_KEY_ENV.lower()}:fallback_to_deterministic")
         return out
+
+    bearer = build_zhipu_jwt(api_key) if cfg["is_zhipu"] else api_key
 
     import requests as _r
     tool_calls_log: list[dict] = []
@@ -176,18 +187,23 @@ def _llm_step(msg: str, registry: ToolRegistry, max_steps: int = 3) -> dict:
     final_answer = ""
     for step in range(max_steps):
         try:
+            payload: dict = {
+                "model": cfg["model"],
+                "messages": messages,
+                "tools": tools_schema,
+                "tool_choice": "auto",
+                "temperature": 0.2,
+            }
+            if cfg["reasoning_effort"]:
+                payload["reasoning_effort"] = cfg["reasoning_effort"]
             resp = _r.post(
-                "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-                headers={"Authorization": f"Bearer {key}",
-                         "Content-Type": "application/json"},
-                json={
-                    "model": "glm-4-flash",
-                    "messages": messages,
-                    "tools": tools_schema,
-                    "tool_choice": "auto",
-                    "temperature": 0.2,
+                f"{cfg['api_base']}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {bearer}",
+                    "Content-Type": "application/json",
                 },
-                timeout=30,
+                json=payload,
+                timeout=cfg["timeout"],
             )
             resp.raise_for_status()
             choice = resp.json()["choices"][0]["message"]

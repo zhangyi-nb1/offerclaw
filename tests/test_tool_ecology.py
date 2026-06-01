@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tool ecology + ReAct Agent 测试（V4 §3）。
 
-所有测试默认不依赖 LLM。LLM mode 仅在 ZHIPU_API_KEY 存在时跑一条 smoke。
+所有测试默认不依赖 LLM。LLM mode 仅在当前 chat-completion key 存在时跑一条 smoke。
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+
+from day1_api_starter import API_KEY_ENV
 
 
 JD_AI = (
@@ -151,18 +153,19 @@ def test_react_deterministic_match_without_jd_in_message():
 
 def test_react_llm_mode_fallback_when_no_key(monkeypatch):
     """没有 KEY 时 LLM 模式必须降级到 deterministic 且能跑通。"""
+    monkeypatch.delenv(API_KEY_ENV, raising=False)
     monkeypatch.delenv("ZHIPU_API_KEY", raising=False)
     from react_agent import run
     out = run("今天该做什么？", mode="llm")
     # 降级后 mode 仍为 deterministic
     assert out["mode"] == "deterministic"
-    assert "no_zhipu_key:fallback_to_deterministic" in out["errors"]
+    assert f"no_{API_KEY_ENV.lower()}:fallback_to_deterministic" in out["errors"]
     assert out["tool_calls"][0]["name"] == "today_advice"
 
 
 @pytest.mark.skipif(
-    not os.environ.get("ZHIPU_API_KEY"),
-    reason="需要 ZHIPU_API_KEY 才能跑真实 LLM 模式",
+    not os.environ.get(API_KEY_ENV),
+    reason=f"需要 {API_KEY_ENV} 才能跑真实 LLM 模式",
 )
 def test_react_llm_mode_real_smoke():
     from react_agent import run

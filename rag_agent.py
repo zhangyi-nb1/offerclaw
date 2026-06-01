@@ -100,17 +100,23 @@ class RAGAgent:
     """
     OfferClaw RAG Agent
     整合 RAG 检索 + LLM 问答 + 工具调用的完整 Agent。
+
+    v0.6.3 起 chat completion 走 OpenAI 兼容代理（gpt-5.4 + medium effort）。
+    Embeddings 仍走 rag_tools.py 的 Zhipu 路径（代理不支持 embeddings）。
     """
 
     def __init__(
         self,
         collection_name: str = COLLECTION_NAME,
         top_k: int = DEFAULT_TOP_K,
-        model: str = LLM_MODEL,
+        model: str | None = None,
     ):
+        from day1_api_starter import get_llm_config
+
+        cfg = get_llm_config()
         self.collection_name = collection_name
         self.top_k = top_k
-        self.model = model
+        self.model = model or cfg["model"]
         self.client: Optional[chromadb.PersistentClient] = None
         self.collection = None
         self.conversation_history = []  # [{"role": ..., "content": ...}]
@@ -331,17 +337,29 @@ class RAGAgent:
         return assistant_msg
 
     def _call_llm(self, messages: list[dict]) -> dict:
-        """调用 LLM（支持工具调用）"""
-        token = generate_zhipu_token()
+        """调用 LLM（支持工具调用）
 
-        resp_data = {
+        v0.6.3 起：默认走 OpenAI 兼容代理 (gpt-5.4 + medium effort)。
+        ``chat_with_llm_raw`` 内部根据 ``get_llm_config()`` 选 bearer 方式。
+        """
+        from day1_api_starter import build_zhipu_jwt, get_llm_config
+
+        cfg = get_llm_config()
+        if cfg["is_zhipu"]:
+            bearer = build_zhipu_jwt(cfg["api_key"])
+        else:
+            bearer = cfg["api_key"]
+
+        resp_data: dict = {
             "model": self.model,
             "messages": messages,
             "tools": self.tools,
             "tool_choice": "auto",
         }
+        if cfg["reasoning_effort"]:
+            resp_data["reasoning_effort"] = cfg["reasoning_effort"]
 
-        resp = chat_with_llm_raw(token, resp_data)
+        resp = chat_with_llm_raw(bearer, resp_data)
         
         # 解析响应
         choices = resp.get("choices", [])
@@ -362,16 +380,26 @@ class RAGAgent:
 # =====================================================
 
 def chat_with_llm_raw(token: str, body: dict) -> dict:
-    """直接调用智谱 LLM API，支持工具调用"""
+    """直接调用 chat completion endpoint，支持工具调用。
+
+    v0.6.3 起 endpoint 从 ``get_llm_config()`` 读，默认是 OpenAI 兼容代理。
+    ``token`` 由调用方根据 provider 选好（OpenAI = raw key, Zhipu = JWT）。
+    """
     import requests
 
-    endpoint = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+    from day1_api_starter import get_llm_config
+
+    cfg = get_llm_config()
+    endpoint = f"{cfg['api_base']}/chat/completions"
 
     resp = requests.post(
         endpoint,
-        headers={"Authorization": f"Bearer {token}"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
         json=body,
-        timeout=60,
+        timeout=cfg["timeout"],
     )
     resp.raise_for_status()
     return resp.json()
@@ -393,7 +421,8 @@ def main():
     print("OfferClaw RAG Agent V1")
     print(f"检索: {'启用' if not args.no_retrieval else '禁用'}")
     print(f"Top-K: {args.top_k}")
-    print(f"API Key: {'已配置' if os.environ.get('ZHIPU_API_KEY') else '未配置'}")
+    from day1_api_starter import API_KEY_ENV  # noqa: PLC0415
+    print(f"API Key ({API_KEY_ENV}): {'已配置' if os.environ.get(API_KEY_ENV) else '未配置'}")
     print("=" * 60)
     print()
 

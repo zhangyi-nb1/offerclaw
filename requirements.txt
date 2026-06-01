@@ -15,3 +15,10 @@ requests>=2.31.0
 
 # 数据模型（FastAPI 依赖）
 pydantic>=2.0.0
+
+# 工程自检 / 测试
+pytest>=9.0.0
+jsonschema>=4.0.0
+
+# JD 抓取 SPA 兜底
+playwright>=1.60.0

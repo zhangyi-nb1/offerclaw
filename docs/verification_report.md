@@ -10,11 +10,12 @@
 
 | 项 | 值 |
 |---|---|
-| 生成时间 | 2026-04-25（V2 收口）；doctor/verify_pipeline 于 2026-04-26 更新；阶段 B 收口审计于 2026-04-29 复查 |
+| 生成时间 | 2026-04-25（V2 收口）；doctor/verify_pipeline 于 2026-04-26 更新；阶段 B 收口审计于 2026-04-29 复查；2026-06-01 本地环境复核 |
 | Git commit | `2693c75`（阶段 B 收口审计 + B1-B6） |
 | Python | 3.13.7 |
 | OS | Windows |
 | 是否走真实 API | ✅ 是（智谱 GLM-4-Flash + embedding-3） |
+| 当前口径 | FastAPI 28 路由 |
 
 > **doctor 口径**：`doctor.py` 启动时自动从 `.env.local` 注入 `ZHIPU_API_KEY` 到当前进程（`.env.local` 已被 `.gitignore` 的 `.env.*` 规则排除，不入 git；KEY 在终端输出仅显示 `xxx***xxx · len=N` 掩码）。期望 **10 OK · 0 WARN · 0 ERR**。如 `.env.local` 缺失才会回落到 9 OK · 1 WARN。
 
