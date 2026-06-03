@@ -18,7 +18,7 @@ OfferClaw · Agent Demo · 最小可运行版
 明确不做（下一版再说）：
     - RAG / 向量检索 / 知识库
     - LangGraph / LlamaIndex 框架化
-    - Web UI / JVS Claw 集成（JVS Claw 用 Prompt 文件直接驱动，不走本脚本）
+    - Web UI 集成（已在 rag_api.py 实现）
 
 使用：
     1. 确认 .env.local 里已有 OPENAI_API_KEY（v0.6.3 起，day1 已配好）

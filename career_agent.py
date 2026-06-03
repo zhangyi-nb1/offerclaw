@@ -114,6 +114,15 @@ def days_since(date_str: str) -> Optional[int]:
     return (datetime.date.today() - d).days
 
 
+def _load_active_adjustments() -> List[str]:
+    """读取 memory 层沉淀的次日调整规则（P2）。失败静默返回 []。"""
+    try:
+        from memory_layers import SemanticMemory, get_active_adjustments
+        return get_active_adjustments(SemanticMemory())
+    except Exception:
+        return []
+
+
 def get_today_advice() -> Dict[str, object]:
     """生成"今天最该做什么"。返回结构供 /api/today 直接 JSON 化。"""
     apps_md = _read(APPLICATIONS_PATH)
@@ -149,6 +158,11 @@ def get_today_advice() -> Dict[str, object]:
             f"可在 ⑤ 卡片直接追加。"
         )
 
+    # 2.5) P2：读取复盘沉淀的"次日调整规则"，并入今日建议
+    adjustments = _load_active_adjustments()
+    for a in adjustments:
+        next_actions.append(f"【复盘调整】{a}")
+
     # 3) 兜底建议
     if not headline:
         if rows:
@@ -167,6 +181,7 @@ def get_today_advice() -> Dict[str, object]:
         "reason": reason,
         "source": source,
         "next_actions": next_actions,
+        "adjustments": adjustments,
         "stats": {
             "applications_total": len(rows),
             "last_log_date": last_log or "",

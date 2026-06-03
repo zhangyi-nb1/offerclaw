@@ -36,7 +36,7 @@ from rag_tools import (
     get_embedding,
     get_embeddings_batch,
     chat_with_llm,
-    generate_zhipu_token,
+    get_collection_name,
     LLM_MODEL,
 )
 
@@ -46,11 +46,11 @@ from rag_tools import (
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_DIR = os.path.join(BASE_DIR, "chroma_db")
-COLLECTION_NAME = "offerclaw_docs"
+COLLECTION_NAME = get_collection_name()
 DEFAULT_TOP_K = 5
 
 # 系统 Prompt 模板
-SYSTEM_PROMPT_TEMPLATE = """你是 OfferClaw，一位严谨专业的求职作战助手，部署在 JVS Claw 上。
+SYSTEM_PROMPT_TEMPLATE = """你是 OfferClaw，一位严谨专业的求职作战助手，运行在本地 OpenClaw 环境中。
 
 你的使命是陪伴用户走完"画像 → 匹配 → 规划 → 执行 → 复盘"的完整求职闭环。
 
@@ -75,7 +75,7 @@ SYSTEM_PROMPT_TEMPLATE = """你是 OfferClaw，一位严谨专业的求职作战
 - 先给结论与关键建议，再补充背景"""
 
 # 无检索时的系统 Prompt
-SYSTEM_PROMPT_NO_RETRIEVAL = """你是 OfferClaw，一位严谨专业的求职作战助手，部署在 JVS Claw 上。
+SYSTEM_PROMPT_NO_RETRIEVAL = """你是 OfferClaw，一位严谨专业的求职作战助手，运行在本地 OpenClaw 环境中。
 
 你的使命是陪伴用户走完"画像 → 匹配 → 规划 → 执行 → 复盘"的完整求职闭环。
 
@@ -102,7 +102,7 @@ class RAGAgent:
     整合 RAG 检索 + LLM 问答 + 工具调用的完整 Agent。
 
     v0.6.3 起 chat completion 走 OpenAI 兼容代理（gpt-5.4 + medium effort）。
-    Embeddings 仍走 rag_tools.py 的 Zhipu 路径（代理不支持 embeddings）。
+    Embeddings 由 rag_tools.py 的 EMBEDDING_PROVIDER 配置决定。
     """
 
     def __init__(

@@ -79,21 +79,30 @@ def check_env() -> None:
     env_local = ROOT / ".env.local"
     if env_local.exists():
         ok(".env.local 存在（已被 .gitignore 排除，不入 git）")
-        # 不读 / 不打印 KEY 值，仅判定字段存在
+        # 不打印 KEY 值，仅判定字段存在
         content = env_local.read_text(encoding="utf-8", errors="replace")
-        if "ZHIPU_API_KEY" in content:
-            ok(".env.local 含 ZHIPU_API_KEY 字段")
+        if any(k in content for k in ("OPENAI_API_KEY", "ZHIPU_API_KEY", "DASHSCOPE_API_KEY", "BAILIAN_API_KEY")):
+            ok(".env.local 含至少一个 API Key 字段")
         else:
-            warn(".env.local 中未发现 ZHIPU_API_KEY")
+            warn(".env.local 中未发现 API Key 字段")
     else:
-        warn(".env.local 不存在（运行时需手动 export ZHIPU_API_KEY）")
-    if os.environ.get("ZHIPU_API_KEY"):
-        # 不打印 KEY，仅打印长度与前后掩码片段，证明确实存在
-        v = os.environ["ZHIPU_API_KEY"]
+        warn(".env.local 不存在（运行时需手动 export API Key）")
+
+    from day1_api_starter import get_llm_config
+    from rag_tools import describe_embedding_config, has_embedding_api_key
+
+    cfg = get_llm_config()
+    if cfg["api_key"]:
+        v = cfg["api_key"]
         masked = f"{v[:3]}***{v[-3:]} · len={len(v)}" if len(v) >= 8 else "***"
-        ok(f"ZHIPU_API_KEY 已注入当前进程（{masked}）")
+        ok(f"{cfg['api_key_env']} 已注入当前 LLM 配置（{masked}）")
     else:
-        warn("当前进程未注入 ZHIPU_API_KEY（前端 / RAG 调用会失败）")
+        warn(f"当前 LLM 配置未注入 {cfg['api_key_env']}（LLM 调用会失败）")
+
+    if has_embedding_api_key():
+        ok(f"Embedding 配置就绪：{describe_embedding_config()}")
+    else:
+        warn(f"Embedding API Key 未配置：{describe_embedding_config()}（RAG ingest/query 会使用伪向量）")
 
 
 def check_core_files() -> None:
@@ -123,6 +132,22 @@ def check_chroma() -> None:
         ok(f"chroma_db 索引存在（{sqlite.stat().st_size // 1024} KB）")
     else:
         warn("chroma_db 目录存在但索引为空 → 重新跑 rag_ingest.py")
+        return
+
+    try:
+        import chromadb
+        from rag_tools import get_collection_name
+
+        collection_name = get_collection_name()
+        client = chromadb.PersistentClient(path=str(db))
+        col = client.get_collection(collection_name)
+        count = col.count()
+        if count > 0:
+            ok(f"当前 collection `{collection_name}` 可用（{count} chunks）")
+        else:
+            warn(f"当前 collection `{collection_name}` 为空 → 运行 `python rag_ingest.py --rebuild`")
+    except Exception as exc:
+        warn(f"当前 collection 不可用 → {exc}")
 
 
 def check_tests() -> None:

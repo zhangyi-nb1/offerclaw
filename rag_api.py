@@ -60,6 +60,14 @@ _log = get_logger("offerclaw.api")
 _rag_agent = None
 
 
+def _active_llm_api_key() -> tuple[str, str]:
+    """Return the active chat API key and env name from day1_api_starter config."""
+    from day1_api_starter import get_llm_config
+
+    cfg = get_llm_config()
+    return cfg["api_key"], cfg["api_key_env"]
+
+
 def get_rag_agent():
     """懒加载 RAG Agent"""
     global _rag_agent
@@ -84,6 +92,9 @@ class QueryResponse(BaseModel):
     answer: str
     retrieval_count: int
     timestamp: str
+    in_kb: bool = True            # P2.5：是否命中知识库
+    sources: list[str] = []       # 命中时的来源文件名
+    matched_by: str = ""          # vector | lexical_rescue | ""
 
 
 class MatchRequest(BaseModel):
@@ -135,6 +146,13 @@ class DailyAppendRequest(BaseModel):
     text: str
 
 
+class DailyLogStructuredRequest(BaseModel):
+    tag: str = ""
+    done: list[str] = []
+    todo: list[str] = []
+    notes: str = ""
+
+
 class ResumeResponse(BaseModel):
     pitch: str = ""
     stories_preview: str = ""
@@ -146,6 +164,7 @@ class TodayResponse(BaseModel):
     reason: str = ""
     source: str = ""
     next_actions: list[str] = []
+    adjustments: list[str] = []  # P2：复盘沉淀的次日调整规则
     stats: dict = {}
 
 
@@ -327,14 +346,17 @@ async def info():
 async def health():
     """健康检查"""
     import chromadb
+    from rag_tools import describe_embedding_config, get_collection_name
+
     db_dir = os.path.join(BASE_DIR, "chroma_db")
     db_exists = os.path.exists(db_dir)
+    collection_name = get_collection_name()
     
     collection_count = 0
     if db_exists:
         client = chromadb.PersistentClient(path=db_dir)
         try:
-            col = client.get_collection("offerclaw_docs")
+            col = client.get_collection(collection_name)
             collection_count = col.count()
         except Exception:
             pass
@@ -342,7 +364,9 @@ async def health():
     return {
         "status": "healthy" if collection_count > 0 else "degraded",
         "chroma_db": "connected" if db_exists else "not_found",
+        "collection": collection_name,
         "collection_records": collection_count,
+        "embedding": describe_embedding_config(),
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
@@ -368,25 +392,25 @@ async def get_profile():
 
 @app.post("/api/query", response_model=QueryResponse)
 async def rag_query(req: QueryRequest):
-    """
-    RAG 问答接口。
-    传入问题，返回 LLM 整合后的回答 + 检索到的片段数量。
-    """
-    try:
-        agent = get_rag_agent()
-        
-        # 先检索
-        docs = agent._retrieve(req.query, req.top_k)
-        retrieval_count = len(docs) if docs else 0
-        
-        # 再调用 LLM
-        answer = agent.chat(req.query, use_retrieval=req.use_retrieval)
+    """RAG 问答接口（知识库优先 · 带门槛）。
 
+    与微信路径（offerclaw_cli query）共用 rag_gate.gated_query：
+    命中知识库才基于 KB 合成答案并标注来源；未命中坦白"知识库暂无"，
+    绝不退回通用知识杜撰。
+    """
+    import asyncio
+    try:
+        from rag_gate import gated_query
+        loop = asyncio.get_event_loop()
+        d = await loop.run_in_executor(None, lambda: gated_query(req.query, req.top_k))
         return QueryResponse(
             query=req.query,
-            answer=answer,
-            retrieval_count=retrieval_count,
+            answer=d.get("answer", ""),
+            retrieval_count=d.get("retrieval_count", 0),
             timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            in_kb=d.get("in_kb", False),
+            sources=d.get("sources", []),
+            matched_by=d.get("matched_by") or "",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG 查询失败: {str(e)}")
@@ -485,26 +509,21 @@ async def gen_plan(req: PlanRequest):
     import asyncio
     try:
         from plan_gen import (
-            read_text, build_messages, call_llm_plain, save_plan,
-            PROFILE_PATH, PLAN_PROMPT_PATH, DAILY_LOG_PATH,
-            SOURCE_POLICY_PATH, TARGET_RULES_PATH,
+            prepare_plan_messages, call_llm_plain, save_plan,
+            append_resources_appendix,
         )
-        api_key = os.getenv("ZHIPU_API_KEY")
+        api_key, api_key_env = _active_llm_api_key()
         if not api_key:
-            raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置")
+            raise HTTPException(status_code=500, detail=f"{api_key_env} 未配置")
         gaps = (req.gaps or "").strip() or "（前端未提供缺口清单，按用户画像通用方向规划）"
-        messages = build_messages(
-            profile=read_text(PROFILE_PATH),
-            plan_prompt=read_text(PLAN_PROMPT_PATH),
-            daily_log=read_text(DAILY_LOG_PATH),
-            source_policy=read_text(SOURCE_POLICY_PATH),
-            target_rules=read_text(TARGET_RULES_PATH),
-            gaps=gaps,
-        )
+        # 统一入口：读依赖 + RAG 检索资源 + 组装 messages（与 CLI 一致）
+        messages, resources = prepare_plan_messages(gaps)
         loop = asyncio.get_event_loop()
         plan_md = await loop.run_in_executor(
             None, lambda: call_llm_plain(messages, api_key, max_tokens=3500)
         )
+        # 确定性追加参考资源附录，保证 API 路径也必含知识库引用
+        plan_md = append_resources_appendix(plan_md, resources)
         path = save_plan(plan_md)
         return PlanResponse(plan_md=plan_md, saved_path=path)
     except HTTPException:
@@ -512,6 +531,27 @@ async def gen_plan(req: PlanRequest):
     except Exception as e:
         _log.exception("plan failed")
         raise HTTPException(status_code=500, detail=f"规划失败: {str(e)}")
+
+
+@app.post("/api/daily/log")
+async def append_daily_structured(req: DailyLogStructuredRequest):
+    """结构化留痕（Web 表单专用）：主线/已完成/未完成/笔记 → daily_log.md。
+
+    与 CLI cmd_log、晚间复盘 _parse_log_block 走同一写入器，格式统一可解析。
+    """
+    try:
+        from summary_tool import append_structured_daily_log
+        if not (req.done or req.todo or req.notes.strip() or req.tag.strip()):
+            raise HTTPException(status_code=400, detail="留痕内容不能全空")
+        result = append_structured_daily_log(
+            tag=req.tag.strip(), done=req.done, todo=req.todo, notes=req.notes,
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log.exception("structured daily log failed")
+        raise HTTPException(status_code=500, detail=f"留痕失败: {str(e)}")
 
 
 @app.get("/api/daily", response_model=DailyResponse)
@@ -637,9 +677,9 @@ async def build_resume(req: ResumeBuildRequest):
 async def build_resume_stream(req: ResumeBuildRequest):
     """流式版简历生成：SSE 逐 token 返回，首 token 约 1s 内到达。"""
     import asyncio, json as _json
-    api_key = os.getenv("ZHIPU_API_KEY")
+    api_key, api_key_env = _active_llm_api_key()
     if not api_key:
-        raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置")
+        raise HTTPException(status_code=500, detail=f"{api_key_env} 未配置")
     from resume_builder import build_messages as _bm, _read
     from plan_gen import call_llm_stream
     meta = []
@@ -680,23 +720,16 @@ async def build_resume_stream(req: ResumeBuildRequest):
 async def gen_plan_stream(req: PlanRequest):
     """流式版规划生成：SSE 逐 token 返回。"""
     import asyncio, json as _json
-    api_key = os.getenv("ZHIPU_API_KEY")
+    api_key, api_key_env = _active_llm_api_key()
     if not api_key:
-        raise HTTPException(status_code=500, detail="ZHIPU_API_KEY 未配置")
+        raise HTTPException(status_code=500, detail=f"{api_key_env} 未配置")
     from plan_gen import (
-        read_text, build_messages, call_llm_stream, save_plan,
-        PROFILE_PATH, PLAN_PROMPT_PATH, DAILY_LOG_PATH,
-        SOURCE_POLICY_PATH, TARGET_RULES_PATH,
+        prepare_plan_messages, call_llm_stream, save_plan,
+        append_resources_appendix,
     )
     gaps = (req.gaps or "").strip() or "（前端未提供缺口清单，按用户画像通用方向规划）"
-    messages = build_messages(
-        profile=read_text(PROFILE_PATH),
-        plan_prompt=read_text(PLAN_PROMPT_PATH),
-        daily_log=read_text(DAILY_LOG_PATH),
-        source_policy=read_text(SOURCE_POLICY_PATH),
-        target_rules=read_text(TARGET_RULES_PATH),
-        gaps=gaps,
-    )
+    # 统一入口：读依赖 + RAG 检索资源 + 组装 messages（与 CLI / 非流式一致）
+    messages, resources = prepare_plan_messages(gaps)
 
     async def generate():
         loop = asyncio.get_event_loop()
@@ -708,8 +741,12 @@ async def gen_plan_stream(req: PlanRequest):
                 for tok in call_llm_stream(messages, api_key, max_tokens=3500):
                     full_text.append(tok)
                     loop.call_soon_threadsafe(q.put_nowait, ("tok", tok))
-                # 流结束后落盘
-                plan_md = "".join(full_text)
+                # 流结束后：确定性追加参考资源附录，再落盘
+                plan_md = append_resources_appendix("".join(full_text), resources)
+                # 把附录部分也作为最后一段 token 推给前端
+                appendix = plan_md[len("".join(full_text)):]
+                if appendix:
+                    loop.call_soon_threadsafe(q.put_nowait, ("tok", appendix))
                 path = save_plan(plan_md)
                 loop.call_soon_threadsafe(q.put_nowait, ("done", path))
             except Exception as exc:
@@ -735,76 +772,30 @@ async def gen_plan_stream(req: PlanRequest):
 
 @app.post("/api/stream")
 async def rag_stream(req: QueryRequest):
-    """
-    SSE 流式问答接口。
-    用智谱 stream=True 把 token 实时推送给前端，模拟 ChatGPT 体验。
-    对应蔚来 JD：端到端 LLM 应用工作流 / API 服务集成。
-    """
-    from rag_tools import generate_zhipu_token, get_embedding, LLM_MODEL
-    import chromadb
+    """SSE 流式问答（知识库优先 · 带门槛 · 与 /api/query 同一套 rag_gate）。
 
+    先推 meta（in_kb / mode / sources），再逐 token 推 delta：
+    - 命中知识库 → 基于 KB 合成 + 标出处；
+    - 未命中 → 通用知识 + 项目先验兜底，开头带"非知识库"标注。
+    用 qwen-turbo 合成，首字延迟低、体感快。
+    """
+    from rag_gate import gated_query_stream
     rid = current_request_id()
     _log.info(f"stream start q={req.query[:60]!r}")
 
-    # 1) 检索（可选）
-    context_block = ""
-    retrieval_count = 0
-    if req.use_retrieval:
-        db_dir = os.path.join(BASE_DIR, "chroma_db")
-        if os.path.exists(db_dir):
-            try:
-                client = chromadb.PersistentClient(path=db_dir)
-                col = client.get_collection("offerclaw_docs")
-                emb = get_embedding(req.query)
-                res = col.query(query_embeddings=[emb], n_results=req.top_k)
-                docs = res["documents"][0]
-                metas = res["metadatas"][0]
-                retrieval_count = len(docs)
-                parts = [
-                    f"[片段{i+1}] 来源: {metas[i].get('source','?')}\n{docs[i][:300]}"
-                    for i in range(retrieval_count)
-                ]
-                context_block = "\n\n---\n\n".join(parts)
-            except Exception as e:
-                _log.warning(f"retrieval failed: {e}")
-
-    system = (
-        "你是 OfferClaw，求职作战助手。基于下面的检索片段回答用户问题，"
-        "片段中没有的内容请如实告知，不要编造。\n\n【检索片段】\n"
-        + (context_block or "（本次无检索结果）")
-    )
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": req.query},
-    ]
-
     def gen():
-        yield f"event: meta\ndata: {json.dumps({'request_id': rid, 'retrieval_count': retrieval_count}, ensure_ascii=False)}\n\n"
         try:
-            token = generate_zhipu_token()
-            with _requests.post(
-                "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"model": LLM_MODEL, "messages": messages, "stream": True},
-                stream=True,
-                timeout=120,
-            ) as resp:
-                resp.raise_for_status()
-                for raw in resp.iter_lines(decode_unicode=True):
-                    if not raw:
-                        continue
-                    if raw.startswith("data: "):
-                        chunk = raw[6:]
-                        if chunk.strip() == "[DONE]":
-                            break
-                        try:
-                            j = json.loads(chunk)
-                            delta = j["choices"][0].get("delta", {}).get("content", "")
-                            if delta:
-                                yield f"data: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
-                        except Exception:
-                            continue
-            yield "event: done\ndata: {}\n\n"
+            for ev in gated_query_stream(req.query, req.top_k):
+                t = ev.get("type")
+                if t == "meta":
+                    meta = {k: ev[k] for k in
+                            ("in_kb", "mode", "sources", "matched_by", "best_distance") if k in ev}
+                    meta["request_id"] = rid
+                    yield f"event: meta\ndata: {json.dumps(meta, ensure_ascii=False)}\n\n"
+                elif t == "delta":
+                    yield f"data: {json.dumps({'delta': ev.get('text', '')}, ensure_ascii=False)}\n\n"
+                elif t == "done":
+                    yield "event: done\ndata: {}\n\n"
             _log.info("stream done")
         except Exception as e:
             _log.exception("stream failed")

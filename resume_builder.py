@@ -98,9 +98,12 @@ def build_messages(jd_summary: str, profile: str) -> list:
 
 def build_resume_for_jd(jd_summary: str, profile_path: str = None) -> Dict[str, str]:
     """生成 JD 定制简历项目段。"""
-    api_key = os.getenv("ZHIPU_API_KEY")
+    from day1_api_starter import get_llm_config
+
+    cfg = get_llm_config()
+    api_key = cfg["api_key"]
     if not api_key:
-        raise RuntimeError("ZHIPU_API_KEY 未配置（.env.local 或环境变量）")
+        raise RuntimeError(f"{cfg['api_key_env']} 未配置（.env.local 或环境变量）")
     profile = _read(profile_path or os.path.join(BASE_DIR, "user_profile.md"))
     messages = build_messages(jd_summary=jd_summary, profile=profile)
     md = call_llm_plain(messages, api_key, max_tokens=2000)
@@ -173,7 +176,7 @@ def build_jd_tailored_section(jd_summary: str = "") -> str:
         return "## JD 定制项目段（占位）\n*未提供 JD，跳过定制段。可调用 `/api/resume/build` 走 LLM 生成。*"
     return ("## JD 定制项目段（骨架）\n"
             "- 候选 JD 关键词命中：参见 `/api/match`\n"
-            "- 建议用 `/api/resume/build`（需 ZHIPU_API_KEY）生成 STAR 段落。\n"
+            "- 建议用 `/api/resume/build`（需当前 LLM API Key）生成 STAR 段落。\n"
             f"- JD 摘要长度：{len(jd_summary)} 字符。")
 
 
@@ -202,7 +205,7 @@ def build_resume_markdown(jd_text: str = "", profile_path: str | None = None,
         "skip_llm": skip_llm,
         "jd_chars": len(jd_text or ""),
     }
-    if not skip_llm and jd_text.strip() and os.getenv("ZHIPU_API_KEY"):
+    if not skip_llm and jd_text.strip():
         try:
             tailored = build_resume_for_jd(jd_text, profile_path=profile_path)
             out["resume_md"] = md + "\n\n## JD 定制项目段（LLM 生成）\n" + tailored.get("resume_md", "")

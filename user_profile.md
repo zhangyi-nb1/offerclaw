@@ -49,7 +49,7 @@
   - 会用：Python（有一定基础，但不熟练，自述仍需系统提升）
   - 想学：【待补充】
 - 工具与框架：
-  - JVS Claw（OfferClaw 项目的主要运行平台）
+  - OpenClaw（OfferClaw 项目的主要运行平台，已从 JVS Claw 迁移至本地）
   - Claude（代码与配置协作助手，负责生成 Python 脚本、Prompt、文档）
   - 其他：GPT
 - AI / LLM 相关技能：

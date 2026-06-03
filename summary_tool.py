@@ -64,11 +64,27 @@ def build_messages(prompt: str, source_policy: str, target_rules: str,
         f"========== source_policy.md ==========\n{source_policy}\n\n"
         f"========== target_rules.md ==========\n{target_rules}\n"
     )
+    structured_ask = (
+        "\n\n在正文复盘之后，另起一段，用如下 ```json 代码块输出结构化复盘"
+        "（供系统沉淀「次日调整规则」）：\n"
+        "```json\n"
+        '{\n'
+        '  "main_tag": "补技能|补项目|补面试|岗位调研|投递准备",\n'
+        '  "deviation_score": 0-100,\n'
+        '  "completed": ["..."],\n'
+        '  "incomplete": ["..."],\n'
+        '  "blockers": ["..."],\n'
+        '  "next_day_suggestion": "..."\n'
+        '}\n'
+        "```\n"
+        "deviation_score：0=完全按计划，100=完全偏离。"
+    )
     if mode == "daily":
         user = (
             f"请按 summary_prompt.md 单日模式复盘 {date_str}。\n"
             "下面是 daily_log.md 中该日期块的全文：\n\n"
             f"========== daily_log [{date_str}] ==========\n{log_block}"
+            + structured_ask
         )
     else:
         user = (
@@ -115,6 +131,131 @@ def _resolve_chat_config(api_key: str) -> dict:
         }
     bearer = build_zhipu_jwt(api_key) if cfg["is_zhipu"] else api_key
     return {**cfg, "bearer": bearer}
+
+
+def append_structured_daily_log(tag: str = "", done=None, todo=None,
+                                notes: str = "", date_str: str = None) -> dict:
+    """把结构化留痕写入 daily_log.md，字段用 ### 分节（与 P2 _parse_log_block 对齐）。
+
+    CLI（offerclaw_cli.cmd_log）、Web 表单（/api/daily/log）、GitHub 同步共用此写入器，
+    保证全项目留痕格式一致、能被晚间复盘正确解析。
+    """
+    import datetime as _dt
+    done = [d for d in (done or []) if str(d).strip()]
+    todo = [t for t in (todo or []) if str(t).strip()]
+    notes = (notes or "").strip()
+    date_str = date_str or _dt.date.today().isoformat()
+
+    lines = [f"\n## {date_str}\n"]
+    if tag:
+        lines += ["### 今日主线标签", tag, ""]
+    lines += ["### 已完成"]
+    lines += [f"- {d}" for d in done] or ["- 【待补充】"]
+    lines += ["", "### 未完成"]
+    lines += [f"- {t}" for t in todo] or ["- （无）"]
+    if notes:
+        lines += ["", "### 学习留痕", notes]
+    entry = "\n".join(lines) + "\n"
+
+    with open(DAILY_LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(entry)
+    return {
+        "status": "ok", "date": date_str, "main_tag": tag,
+        "done_count": len(done), "todo_count": len(todo), "has_notes": bool(notes),
+    }
+
+
+def _parse_log_block(block: str, date_str: str) -> dict:
+    """从 daily_log 日期块里确定性抽取结构化字段（不依赖 LLM）。
+
+    抓取：主线标签、实际完成项、未完成/偏离信号。daily_log 模板含
+    「今日主线标签 / 实际完成 / 偏离度判断 / 明日建议」等字段。
+    """
+    main_tag = ""
+    m = re.search(r"主线标签[：:\s]*([^\n（(]+)", block)
+    if m:
+        main_tag = m.group(1).strip(" `*")
+
+    def _section(name: str) -> list[str]:
+        # 抓 "### <name>" 或 "<name>：" 后面的列表/段落，到下一个 ## / ### 为止。
+        # 注意：行尾 \n 已被 .*\n? 吃掉，故下一标题的 lookahead 不带前导 \n。
+        pat = rf"(?:#+\s*{name}|{name})[：:\s]*\n?((?:.*\n?)*?)(?=#{{1,6}}\s|\Z)"
+        mm = re.search(pat, block)
+        if not mm:
+            return []
+        items = []
+        for ln in mm.group(1).splitlines():
+            s = ln.strip(" -*•\t")
+            if s and not s.startswith("#") and len(s) >= 2:
+                items.append(s)
+        return items[:8]
+
+    # 字段名与 daily_log 模板（已完成/未完成）及微信留痕（cmd_log）对齐
+    completed = _section("已完成") or _section("实际完成") or _section("实际")
+    incomplete = _section("未完成")
+    return {
+        "date": date_str,
+        "main_tag": main_tag,
+        "completed": completed,
+        "incomplete": incomplete,
+    }
+
+
+def _extract_llm_json(summary_text: str) -> dict:
+    """若 LLM 输出里带 ```json ... ``` 结构化块，鲁棒解析出来；失败返回 {}。"""
+    import json as _json
+    m = re.search(r"```json\s*(\{.*?\})\s*```", summary_text, re.DOTALL)
+    if not m:
+        m = re.search(r"(\{[^{}]*\"deviation_score\"[^{}]*\})", summary_text, re.DOTALL)
+    if not m:
+        return {}
+    try:
+        return _json.loads(m.group(1))
+    except Exception:
+        return {}
+
+
+def build_structured_reflection(block: str, date_str: str, summary_text: str) -> dict:
+    """合并确定性解析 + LLM JSON 增强，产出一条结构化复盘。
+
+    deviation_score 优先用 LLM 给的；没有就按 incomplete/completed 比例估算。
+    """
+    base = _parse_log_block(block, date_str)
+    llm = _extract_llm_json(summary_text)
+
+    completed = llm.get("completed") or base["completed"]
+    incomplete = llm.get("incomplete") or base["incomplete"]
+
+    if "deviation_score" in llm:
+        score = int(llm.get("deviation_score") or 0)
+    else:
+        total = len(completed) + len(incomplete)
+        score = int(round(100 * len(incomplete) / total)) if total else 0
+
+    return {
+        "date": date_str,
+        "main_tag": llm.get("main_tag") or base["main_tag"],
+        "deviation_score": max(0, min(100, score)),
+        "completed": completed,
+        "incomplete": incomplete,
+        "blockers": llm.get("blockers", []) or [],
+        "next_day_suggestion": llm.get("next_day_suggestion", "") or "",
+    }
+
+
+def record_and_distill(reflection: dict) -> dict:
+    """把结构化复盘写入分层 memory 并沉淀调整规则。失败静默（不阻塞复盘落盘）。"""
+    try:
+        from memory_layers import (
+            EpisodicMemory, SemanticMemory,
+            record_reflection, distill_reflections_to_semantic, get_active_adjustments,
+        )
+        epi, sem = EpisodicMemory(), SemanticMemory()
+        record_reflection(epi, reflection)
+        distill_reflections_to_semantic(epi, sem)
+        return {"ok": True, "active_adjustments": get_active_adjustments(sem)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 def save(content: str, mode: str, date_str: str) -> str:
@@ -171,6 +312,22 @@ def main():
     print(f"[3/3] 写入文件...")
     path = save(out, mode, date_str)
     print(f"[OK] 复盘已保存：{path}")
+
+    # P2：单日复盘后沉淀结构化记录 → 分层 memory → 次日调整规则
+    if mode == "daily":
+        reflection = build_structured_reflection(block, date_str, out)
+        result = record_and_distill(reflection)
+        if result.get("ok"):
+            print(f"[MEMORY] 已记录结构化复盘（偏离度={reflection['deviation_score']}，"
+                  f"完成 {len(reflection['completed'])} / 未完成 {len(reflection['incomplete'])}）")
+            adj = result.get("active_adjustments", [])
+            if adj:
+                print("[ADJUST] 当前生效的次日调整规则：")
+                for a in adj:
+                    print(f"  - {a}")
+        else:
+            print(f"[MEMORY] 跳过沉淀：{result.get('error')}")
+
     print("-" * 60)
     print(out[:1500])
     if len(out) > 1500:

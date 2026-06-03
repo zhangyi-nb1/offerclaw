@@ -106,8 +106,9 @@ def test_chroma_db_reachable():
     if not os.path.exists(db):
         pytest.skip("chroma_db not built; run python rag_ingest.py")
     import chromadb
+    from rag_tools import get_collection_name
     client = chromadb.PersistentClient(path=db)
-    col = client.get_collection("offerclaw_docs")
+    col = client.get_collection(get_collection_name())
     assert col.count() > 0
 
 

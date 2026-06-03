@@ -152,9 +152,15 @@ def test_react_deterministic_match_without_jd_in_message():
 
 
 def test_react_llm_mode_fallback_when_no_key(monkeypatch):
-    """没有 KEY 时 LLM 模式必须降级到 deterministic 且能跑通。"""
-    monkeypatch.delenv(API_KEY_ENV, raising=False)
-    monkeypatch.delenv("ZHIPU_API_KEY", raising=False)
+    """没有 KEY 时 LLM 模式必须降级到 deterministic 且能跑通。
+
+    注意：``get_llm_config()`` 内部会调用 ``load_local_env()`` 重新读 .env.local，
+    若用 ``delenv`` 删除后该 key 仍会被 .env.local 重新注入，无法真正模拟"无 key"。
+    故用 ``setenv("")`` —— load_local_env 不会覆盖已存在（即使为空）的 key，
+    从而让 ``get_llm_config()`` 返回空 key，正确触发降级路径。
+    """
+    monkeypatch.setenv(API_KEY_ENV, "")
+    monkeypatch.setenv("ZHIPU_API_KEY", "")
     from react_agent import run
     out = run("今天该做什么？", mode="llm")
     # 降级后 mode 仍为 deterministic

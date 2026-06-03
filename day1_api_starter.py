@@ -11,8 +11,7 @@ v0.6.3 (2026-05) 起：
     默认 provider 从智谱 GLM-4-Flash 切到 **OpenAI 兼容代理**
     （订阅中转站把 ChatGPT 账号包装成 OpenAI API）。
     模型 ``gpt-5.4``，reasoning_effort ``medium``。
-    Embeddings 仍走智谱（代理不支持 embeddings）—— 见
-    rag_tools.py 和 .env.local 的 ZHIPU_API_KEY。
+    Embeddings 由 rag_tools.py 的 EMBEDDING_PROVIDER 配置决定。
 
 使用步骤：
     1. 把 ``.env.local`` 里的 ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` 设好。
@@ -144,6 +143,7 @@ def get_llm_config() -> dict:
 
     所有 chat-completion 调用都应该走这里，避免每个脚本各自硬编码。
     """
+    load_local_env()
     return {
         "api_base": _resolved("OPENAI_BASE_URL", DEFAULT_API_BASE),
         "model": _resolved("LLM_MODEL", DEFAULT_MODEL),

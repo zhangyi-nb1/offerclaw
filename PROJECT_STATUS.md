@@ -7,7 +7,7 @@
 
 ## 元信息
 
-- **项目名**：OfferClaw —— 基于 OpenClaw / JVS Claw 的求职作战官
+- **项目名**：OfferClaw —— 基于 OpenClaw 的求职作战官（已从 JVS Claw 迁移至本地 OpenClaw）
 - **首个真实样本用户**：Zhang Yi（东南大学通信工程硕士，2027-07 毕业）
 - **项目双重目标**：
   1. 交付 OpenClaw 养成挑战赛

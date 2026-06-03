@@ -4,6 +4,7 @@
 # ===== 敏感凭证：绝对不能入库 =====
 .env
 .env.*
+!.env.example
 *.key
 *.pem
 secrets/
@@ -55,3 +56,9 @@ notes.txt
 docs/archive/
 
 _local_notes/
+
+# 知识库原始暂存区（doc2kb/采集中间产物，不入 git）
+knowledge_base/_pending/
+
+# 知识库数据（含爬取的第三方图文，属本地私有数据，不入公开仓库）
+knowledge_base/

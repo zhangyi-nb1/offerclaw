@@ -22,6 +22,10 @@ import chromadb
 from rag_tools import (
     get_embedding,
     chat_with_llm,
+    describe_embedding_config,
+    fake_embedding,
+    get_collection_name,
+    has_embedding_api_key,
 )
 
 # =====================================================
@@ -30,7 +34,7 @@ from rag_tools import (
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_DIR = os.path.join(BASE_DIR, "chroma_db")
-COLLECTION_NAME = "offerclaw_docs"
+COLLECTION_NAME = get_collection_name()
 DEFAULT_TOP_K = 3
 
 # RAG Prompt 模板
@@ -52,20 +56,9 @@ def retrieve(query: str, collection, top_k: int = DEFAULT_TOP_K) -> list[dict]:
     返回 list[dict]，包含 document、source、score。
     """
     # 获取查询向量
-    if not os.environ.get("ZHIPU_API_KEY", ""):
+    if not has_embedding_api_key():
         # 伪向量（与 ingest 阶段一致）
-        import hashlib, struct
-        h = hashlib.sha256(query.encode("utf-8")).digest()
-        extended = b""
-        while len(extended) < 384 * 4:
-            h = hashlib.sha256(h).digest()
-            extended += h
-        floats = struct.unpack("384f", extended[:384 * 4])
-        mn, mx = min(floats), max(floats)
-        if mx == mn:
-            query_embedding = [0.5] * 384
-        else:
-            query_embedding = [(v - mn) / (mx - mn) for v in floats]
+        query_embedding = fake_embedding(query)
     else:
         query_embedding = get_embedding(query)
 
@@ -114,6 +107,11 @@ def main():
     parser.add_argument("query", nargs="?", help="查询问题（不指定则进入交互模式）")
     parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K, help="检索返回数量")
     parser.add_argument("--no-llm", action="store_true", help="只检索不调 LLM")
+    parser.add_argument(
+        "--collection",
+        default=COLLECTION_NAME,
+        help="Chroma collection 名称（默认按 embedding provider/model 自动选择）",
+    )
     args = parser.parse_args()
 
     # 检查数据库
@@ -125,14 +123,15 @@ def main():
     client = chromadb.PersistentClient(path=DB_DIR)
 
     try:
-        collection = client.get_collection(COLLECTION_NAME)
+        collection = client.get_collection(args.collection)
     except Exception:
-        print(f"[ERROR] Collection 不存在: {COLLECTION_NAME}")
+        print(f"[ERROR] Collection 不存在: {args.collection}")
         print("请先运行: python rag_ingest.py")
         sys.exit(1)
 
     print(f"[DB] 当前记录数: {collection.count()}")
-    print(f"[API] {'已配置' if os.environ.get('ZHIPU_API_KEY', '') else '⚠️ 未配置（伪向量模式）'}")
+    print(f"[Embedding] {describe_embedding_config()}")
+    print(f"[API] {'已配置' if has_embedding_api_key() else '⚠️ 未配置（伪向量模式）'}")
     print()
 
     if args.query:
@@ -154,9 +153,9 @@ def main():
 
 def run_query(query: str, collection, top_k: int, no_llm: bool):
     print(f"\n[QUERY] {query!r}")
-    
+
     docs = retrieve(query, collection, top_k)
-    
+
     if not docs:
         print("  未检索到相关片段。")
         return

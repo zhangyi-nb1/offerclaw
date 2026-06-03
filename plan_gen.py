@@ -65,12 +65,212 @@ def read_gaps(args) -> str:
     return data
 
 
+# =====================================================
+# P1：RAG 检索学习资源（让计划基于真实知识库，而非 LLM 即兴编）
+# =====================================================
+
+# 只检索"岗位知识 / 学习资源"类内容，避免把画像/日志等内部文件混进推荐
+RESOURCE_SOURCE_TYPES = ["career_knowledge", "resource"]
+
+_KB_TITLE_CACHE: dict | None = None
+
+
+def _kb_title_map() -> dict:
+    """构建 {文件名: frontmatter title} 映射，用于给资源显示真实主题标题。
+
+    chunk metadata 里的 title 往往是 ``## 正文采集`` 这类切块小标题，对 LLM
+    没有指示性；文件级 frontmatter 的 title（如「7. 大模型 Harness Engineering」）
+    才能让 LLM 把资源对应到缺口。一次性扫描 knowledge_base，缓存结果。
+    """
+    global _KB_TITLE_CACHE
+    if _KB_TITLE_CACHE is not None:
+        return _KB_TITLE_CACHE
+    import re
+    mapping = {}
+    kb_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_base")
+    for root, _dirs, files in os.walk(kb_dir):
+        if "_pending" in root:
+            continue
+        for fn in files:
+            if not fn.endswith(".md") or fn.startswith("_"):
+                continue
+            try:
+                with open(os.path.join(root, fn), encoding="utf-8") as f:
+                    head = f.read(600)
+                m = re.search(r'^title:\s*"?([^"\n]+)"?\s*$', head, re.MULTILINE)
+                if m:
+                    mapping[fn] = m.group(1).strip()
+            except Exception:
+                continue
+    _KB_TITLE_CACHE = mapping
+    return mapping
+
+
+def _split_gap_queries(gaps: str, direction: str = "") -> list[str]:
+    """把缺口清单拆成若干条独立检索 query。
+
+    每条缺口（以 -/* 或数字开头的行，或冒号后的短句）单独成一条 query，
+    并各自拼上方向语境。这样能为「RAG 缺口」「Agent 缺口」分别检索到
+    各自最相关的章节，而不是用一个大杂烩 query 把它们平均掉。
+    """
+    items = []
+    for ln in gaps.splitlines():
+        s = ln.strip().lstrip("-*0123456789.、 ").strip()
+        # 去掉"技能缺口："这类小标题前缀
+        if "：" in s and len(s.split("：", 1)[0]) <= 6:
+            s = s.split("：", 1)[1].strip()
+        if len(s) >= 6:
+            items.append(s)
+    if not items:
+        items = [gaps.strip()]
+    prefix = f"{direction} " if direction else ""
+    return [f"{prefix}{it}" for it in items]
+
+
+def retrieve_learning_resources(
+    gaps: str,
+    direction: str = "",
+    per_query: int = 4,
+    top_files: int = 6,
+) -> list[dict]:
+    """基于缺口清单做 RAG 检索，返回去重后的学习资源片段。
+
+    返回 ``[{"source": 文件名, "title": 标题, "snippet": 正文片段}, ...]``。
+    设计要点：
+    - **逐条缺口分别检索**（multi-query），再合并去重，保证每个缺口都能
+      命中针对性资源，而非一个大杂烩 query 把不同主题平均掉
+    - 只检索 ``career_knowledge`` / ``resource`` 两类 source_type
+    - 按 source 文件去重；跳过纯 frontmatter / 纯目录等低密度片段
+    - 任何失败（无 KEY / 集合不存在 / 依赖缺失）都静默返回 []，
+      让 plan_gen 在离线 / 无 RAG 时仍能正常出计划
+    """
+    try:
+        import chromadb
+        from rag_tools import get_collection_name, get_embeddings_batch, has_embedding_api_key
+
+        if not has_embedding_api_key():
+            return []
+
+        client = chromadb.PersistentClient(
+            path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_db")
+        )
+        col = client.get_collection(get_collection_name())
+        if col.count() == 0:
+            return []
+
+        queries = _split_gap_queries(gaps, direction)
+        embeddings = get_embeddings_batch(queries)
+
+        seen_sources = set()
+        out = []
+        # 轮转：每条 query 先各取最佳 1 个不重复来源，再回头补第 2 个……
+        # 这样保证「每个缺口都有资源」，而不是某个缺口霸占全部名额。
+        ranked_per_query = []
+        for emb in embeddings:
+            res = col.query(
+                query_embeddings=[emb],
+                n_results=per_query * 3,
+                where={"source_type": {"$in": RESOURCE_SOURCE_TYPES}},
+                include=["documents", "metadatas"],
+            )
+            ranked_per_query.append(list(zip(res.get("documents", [[]])[0],
+                                             res.get("metadatas", [[]])[0])))
+
+        for round_i in range(per_query * 3):
+            for hits in ranked_per_query:
+                if round_i >= len(hits):
+                    continue
+                doc, meta = hits[round_i]
+                src = meta.get("source", "?")
+                if src in seen_sources:
+                    continue
+                snippet = _clean_snippet(doc)
+                if len(snippet) < 40:
+                    continue
+                seen_sources.add(src)
+                # 优先用文件级 frontmatter 标题（指示性强），退回 chunk 标题
+                file_title = _kb_title_map().get(src, "")
+                out.append({
+                    "source": src,
+                    "title": file_title or meta.get("title", "") or "",
+                    "snippet": snippet[:300],
+                })
+                if len(out) >= top_files:
+                    return out
+        return out
+    except Exception:
+        return []
+
+
+def _clean_snippet(doc: str) -> str:
+    """清理片段用于展示：去掉 frontmatter、来源 blockquote、页面目录标题，留真正正文。"""
+    import re
+    text = doc
+    # 去掉开头的 YAML frontmatter
+    if text.lstrip().startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            text = parts[2]
+    lines = []
+    for ln in text.splitlines():
+        s = ln.strip()
+        if not s:
+            continue
+        # 跳过来源/路径/入库说明等 blockquote 与一级标题、目录标记
+        if s.startswith(">") or s.startswith("# "):
+            continue
+        if s in ("## 页面结构目录", "## 正文采集", "## 正文内容", "## 图片素材"):
+            continue
+        lines.append(s)
+    return " ".join(lines).strip()
+
+
+def _extract_direction(profile: str) -> str:
+    """从 user_profile.md 抽取目标方向（仅取编号的方向条目，不含薪资/岗位类型噪音）。
+
+    抓「目标方向」标题后紧跟的数字编号行，遇到第一个非编号行即停止。
+    抓不到就返回空串（不影响检索）。
+    """
+    import re
+    lines = profile.splitlines()
+    out = []
+    capture = False
+    for ln in lines:
+        s = ln.strip()
+        if "目标方向" in s:
+            capture = True
+            continue
+        if capture:
+            m = re.match(r"^\d+[\.、]\s*(.+)$", s)
+            if m:
+                out.append(m.group(1).strip())
+            elif s and not s.startswith(("-", "*")):
+                break
+            elif out:  # 已抓到编号项后遇到 - 开头的下一字段，停止
+                break
+    return " ".join(out)
+
+
+def format_resources_block(resources: list[dict]) -> str:
+    """把检索到的资源格式化成喂给 LLM 的上下文块。"""
+    if not resources:
+        return ""
+    lines = ["以下是从本地知识库检索到的、与缺口相关的真实学习资源（请在计划中优先引用，标注来源文件名）：\n"]
+    for i, r in enumerate(resources, 1):
+        title = f"《{r['title']}》" if r["title"] else ""
+        lines.append(f"[资源{i}] {title}（来源：{r['source']}）\n  {r['snippet']}\n")
+    return "\n".join(lines)
+
+
 def build_messages(profile: str, plan_prompt: str, daily_log: str,
-                   source_policy: str, target_rules: str, gaps: str) -> list:
+                   source_policy: str, target_rules: str, gaps: str,
+                   resources_block: str = "") -> list:
     """组装要发给 LLM 的 messages。
 
     设计：把 5 份依赖文件作为 system 上下文，缺口清单作为 user 消息。
     LLM 内部按 plan_prompt 的 9 步流程执行。
+    P1：若 ``resources_block`` 非空，追加 RAG 检索到的真实学习资源，
+    要求 LLM 在计划中优先引用这些资源（标注来源文件名），而非凭空编造。
     """
     system_content = (
         "你是 OfferClaw，部署在长期会话中的求职作战官。\n"
@@ -82,6 +282,13 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
         f"========== daily_log.md ==========\n{daily_log}\n\n"
         f"========== source_policy.md ==========\n{source_policy}\n"
     )
+
+    if resources_block:
+        system_content += (
+            f"\n========== 知识库检索资源（RAG） ==========\n{resources_block}\n"
+            "规划每周/每日任务时，凡涉及上面资源覆盖的主题，"
+            "必须引用对应资源并标注「来源：<文件名>」；不要编造不存在的资源链接。\n"
+        )
 
     user_content = (
         "请按 plan_prompt.md 的 9 步流程，基于下面这份缺口清单生成 4 周计划。\n"
@@ -170,6 +377,60 @@ def _resolve_chat_config(api_key: str) -> dict:
     return {**cfg, "bearer": bearer}
 
 
+def prepare_plan_messages(gaps: str) -> tuple[list, list[dict]]:
+    """读依赖文件 + RAG 检索资源 + 组装 messages 的统一入口。
+
+    CLI 与 FastAPI（/api/plan、/api/plan/stream）共用此函数，确保三条
+    路径的 RAG 接入行为一致（避免只有 CLI 享受 P1）。
+
+    返回 ``(messages, resources)``。``resources`` 供调用方追加确定性附录。
+    """
+    profile = read_text(PROFILE_PATH)
+    plan_prompt = read_text(PLAN_PROMPT_PATH)
+    daily_log = read_text(DAILY_LOG_PATH)
+    source_policy = read_text(SOURCE_POLICY_PATH)
+    target_rules = read_text(TARGET_RULES_PATH)
+
+    direction = _extract_direction(profile)
+    resources = retrieve_learning_resources(gaps, direction=direction)
+    resources_block = format_resources_block(resources)
+
+    messages = build_messages(
+        profile, plan_prompt, daily_log, source_policy, target_rules,
+        gaps, resources_block=resources_block,
+    )
+    return messages, resources
+
+
+def append_resources_appendix(plan_text: str, resources: list[dict]) -> str:
+    """在 LLM 生成的计划末尾追加一个确定性的「参考资源」附录。
+
+    LLM 是否在正文里引用资源不稳定（同一输入可能引用 0~N 次），因此由代码
+    确定性地把 RAG 检索到的真实资源附在计划末尾，保证每份计划都能落到
+    可追溯的知识库来源（满足 P1：计划输出必含知识库资源引用）。
+    """
+    if not resources:
+        return plan_text
+    lines = [
+        plan_text.rstrip(),
+        "",
+        "---",
+        "",
+        "## 📚 本计划参考的知识库资源（RAG 自动检索）",
+        "",
+        "> 由 OfferClaw 基于上面的缺口清单从本地知识库自动检索，按相关度排序；"
+        "学习对应主题时优先参考。",
+        "",
+    ]
+    for i, r in enumerate(resources, 1):
+        title = r["title"] or r["source"]
+        lines.append(f"{i}. **{title}**")
+        lines.append(f"   - 来源：`{r['source']}`")
+        lines.append(f"   - 摘要：{r['snippet'][:140]}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def save_plan(content: str) -> str:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -195,20 +456,22 @@ def main():
         print(f"[ERROR] 未检测到环境变量 {API_KEY_ENV}")
         sys.exit(1)
 
-    print("[1/4] 读取依赖文件...")
-    profile = read_text(PROFILE_PATH)
-    plan_prompt = read_text(PLAN_PROMPT_PATH)
-    daily_log = read_text(DAILY_LOG_PATH)
-    source_policy = read_text(SOURCE_POLICY_PATH)
-    target_rules = read_text(TARGET_RULES_PATH)
-
-    print("[2/4] 读取缺口清单...")
+    print("[1/4] 读取缺口清单...")
     gaps = read_gaps(args)
 
+    print("[2/4] 读取依赖文件 + RAG 检索相关学习资源...")
+    messages, resources = prepare_plan_messages(gaps)
+    if resources:
+        print(f"      ✓ 命中 {len(resources)} 份知识库资源：")
+        for r in resources:
+            print(f"        - {r['title'] or r['source']}（{r['source']}）")
+    else:
+        print("      （未命中知识库资源，将生成不带引用的计划）")
+
     print("[3/4] 调用 LLM 生成计划（最长 120 秒）...")
-    messages = build_messages(profile, plan_prompt, daily_log,
-                              source_policy, target_rules, gaps)
     plan_text = call_llm_plain(messages, api_key)
+    # 确定性追加参考资源附录，保证计划必含可追溯的知识库来源
+    plan_text = append_resources_appendix(plan_text, resources)
 
     print("[4/4] 写入文件...")
     out_path = save_plan(plan_text)

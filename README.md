@@ -138,13 +138,12 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 
 # 2. 配置本机 API 环境（已被 .gitignore 忽略）
-cat > .env.local <<'EOF'
-OPENAI_API_KEY=你的 OpenAI 兼容代理密钥
-OPENAI_BASE_URL=http://127.0.0.1:8080/v1
-LLM_MODEL=gpt-5.4
-LLM_REASONING_EFFORT=medium
-ZHIPU_API_KEY=你的智谱密钥
-EOF
+cp .env.example .env.local
+# 然后把 .env.local 里的 API Key 占位符替换为你自己的 Key。
+# 百炼推荐配置见 .env.example：chat 走 OPENAI_*，embedding 走 EMBEDDING_PROVIDER=bailian。
+
+# 2.5 如果切换了 embedding provider/model，重建对应 Chroma collection
+python rag_ingest.py --rebuild
 
 # 3. 启动 FastAPI 服务
 python -m uvicorn rag_api:app --host 127.0.0.1 --port 8000
@@ -170,7 +169,7 @@ python verify_docs.py             # 4 份关键文档指标口径一致性巡检
 python normalize_applications.py  # applications.md 投递表 schema 校验
 ```
 
-> `OPENAI_*` 用于 chat completion / Agent 推理，`ZHIPU_API_KEY` 用于 embeddings、RAG 索引和部分 JD 定制生成；KEY 仅本地、绝不入 git。
+> `OPENAI_*` 用于 chat completion / Agent 推理；`EMBEDDING_PROVIDER`、`EMBEDDING_MODEL`、`RAG_COLLECTION_NAME` 用于 RAG 向量库切换。百炼可用 `DASHSCOPE_API_KEY`，旧智谱路径可用 `ZHIPU_API_KEY`。KEY 仅本地、绝不入 git。
 
 JVS Claw 云部署见 [`deployment.md`](deployment.md)。
 
@@ -266,8 +265,8 @@ curl localhost:8000/api/trace/{trace_id}
 
 | 层 | 选型 |
 |---|---|
-| **Agent 核心** | Python 3.10+ · 智谱 GLM-4-Flash（OpenAI 兼容 function calling）· 仅 `requests`，无 LangChain / LlamaIndex |
-| **RAG** | 智谱 `embedding-3`（2048 维）· ChromaDB 本地持久化 · 自写分块 + 9 类 source_type 元数据 |
+| **Agent 核心** | Python 3.10+ · OpenAI 兼容 Chat API（百炼 / 代理 / 智谱 fallback）· 仅 `requests`，无 LangChain / LlamaIndex |
+| **RAG** | 可配置 Embedding provider（百炼 `text-embedding-v4` / 智谱 `embedding-3` fallback）· ChromaDB 本地持久化 · 自写分块 + 9 类 source_type 元数据 |
 | **API** | FastAPI + Uvicorn · **28 路由**（24 业务 + 4 系统/UI）· Server-Sent Events 流式 · Swagger UI |
 | **Orchestration** | LangGraph 声明式 StateGraph：RAG 4 节点 + CareerFlow 8 节点 + **条件路由变体**（V4） |
 | **Tool Layer (V4)** | `tools_registry.py` 6 个 OpenAI 兼容 Tool · `react_agent.py` deterministic + LLM 双模式 |

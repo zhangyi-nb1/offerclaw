@@ -33,12 +33,12 @@ sys.path.insert(0, BASE_DIR)
 
 from rag_tools import (
     get_embedding,
-    chat_with_llm,
-    generate_zhipu_token,
-    LLM_MODEL,
+    describe_embedding_config,
+    get_collection_name,
+    has_embedding_api_key,
 )
 
-HAS_API_KEY = bool(os.environ.get("ZHIPU_API_KEY"))
+HAS_API_KEY = has_embedding_api_key()
 
 import chromadb
 
@@ -47,7 +47,7 @@ import chromadb
 # =====================================================
 
 DB_DIR = os.path.join(BASE_DIR, "chroma_db")
-COLLECTION_NAME = "offerclaw_docs"
+COLLECTION_NAME = get_collection_name()
 DEFAULT_TOP_K = 5
 
 
@@ -150,7 +150,7 @@ TOOL_FUNCTIONS = {
 # System Prompt 模板
 # =====================================================
 
-SYSTEM_PROMPT_TEMPLATE = """你是 OfferClaw，一位严谨专业的求职作战助手，部署在 JVS Claw 上。
+SYSTEM_PROMPT_TEMPLATE = """你是 OfferClaw，一位严谨专业的求职作战助手，运行在本地 OpenClaw 环境中。
 
 你的使命是陪伴用户走完"画像 → 匹配 → 规划 → 执行 → 复盘"的完整求职闭环。
 
@@ -174,7 +174,7 @@ SYSTEM_PROMPT_TEMPLATE = """你是 OfferClaw，一位严谨专业的求职作战
 - 优先使用分点、分节
 - 先给结论与关键建议，再补充背景"""
 
-SYSTEM_PROMPT_NO_RETRIEVAL = """你是 OfferClaw，一位严谨专业的求职作战助手，部署在 JVS Claw 上。
+SYSTEM_PROMPT_NO_RETRIEVAL = """你是 OfferClaw，一位严谨专业的求职作战助手，运行在本地 OpenClaw 环境中。
 
 你的使命是陪伴用户走完"画像 → 匹配 → 规划 → 执行 → 复盘"的完整求职闭环。
 
@@ -461,6 +461,7 @@ def main():
     print("OfferClaw LangGraph Agent V1")
     print(f"检索: {'启用' if not args.no_retrieval else '禁用'}")
     print(f"架构: LangGraph 状态机（retrieve → build_prompt → call_llm → tools）")
+    print(f"Embedding: {describe_embedding_config()}")
     print(f"API Key: {'已配置' if HAS_API_KEY else '[MISS] 未配置'}")
     print("=" * 60)
     print()
@@ -473,7 +474,7 @@ def main():
             collection = client.get_collection(COLLECTION_NAME)
             print(f"[DB] Collection 已加载: {collection.count()} 条记录")
         except Exception:
-            print(f"[WARN] Collection 不存在")
+            print(f"[WARN] Collection 不存在: {COLLECTION_NAME}")
     else:
         print(f"[WARN] 数据库目录不存在，RAG 检索不可用")
 

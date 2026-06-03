@@ -247,6 +247,99 @@ def distill_to_semantic(epi: EpisodicMemory, sem: SemanticMemory) -> dict:
     }
 
 
+# =====================================================
+# P2：复盘 → 调整闭环（reflection → adjustments）
+# =====================================================
+
+ADJUSTMENTS_KEY = "daily_adjustments"
+
+
+def record_reflection(epi: EpisodicMemory, reflection: dict) -> dict:
+    """把一条结构化复盘写入 episodic（kind=reflection）。
+
+    ``reflection`` 约定字段（缺省安全）：
+      date, main_tag, deviation_score(0-100), completed[], incomplete[],
+      blockers[], next_day_suggestion
+    """
+    event = {
+        "kind": "reflection",
+        "date": reflection.get("date", ""),
+        "main_tag": reflection.get("main_tag", ""),
+        "deviation_score": int(reflection.get("deviation_score", 0) or 0),
+        "completed": list(reflection.get("completed", []) or []),
+        "incomplete": list(reflection.get("incomplete", []) or []),
+        "blockers": list(reflection.get("blockers", []) or []),
+        "next_day_suggestion": reflection.get("next_day_suggestion", ""),
+    }
+    return epi.append(event)
+
+
+def _norm_task_key(text: str) -> str:
+    """把一条任务/缺口文本归一成用于跨天比对的关键词（取核心名词短语）。"""
+    import re
+    t = re.sub(r"[\s\d\.、:：（）()\[\]【】\-—]+", "", text)
+    return t[:12]  # 取前若干字符做粗粒度聚类，避免措辞细微差异导致漏判
+
+
+def distill_reflections_to_semantic(
+    epi: EpisodicMemory,
+    sem: SemanticMemory,
+    recent_n: int = 5,
+    streak: int = 3,
+) -> dict:
+    """从最近的 reflection 事件沉淀「次日调整规则」到 semantic 层。
+
+    规则（确定性，可单测）：
+    1. **高偏离连续**：最近 ``streak`` 天 deviation_score 均 ≥ 50
+       → 规则 high_deviation_streak（建议减少每日任务量）。
+    2. **反复未完成**：某类任务在最近 ``recent_n`` 天里 ≥ ``streak`` 次出现在
+       incomplete → 规则 recurring_incomplete:<关键词>（建议减量/拆细/前置）。
+
+    结果写入 ``sem[ADJUSTMENTS_KEY] = {"rules": [...], "updated_at": ...}``。
+    """
+    reflections = [e for e in epi.all() if e.get("kind") == "reflection"]
+    recent = reflections[-recent_n:]
+    rules: list[dict] = []
+
+    # 规则 1：高偏离连续
+    if len(recent) >= streak:
+        tail = recent[-streak:]
+        if all(int(e.get("deviation_score", 0) or 0) >= 50 for e in tail):
+            rules.append({
+                "pattern": "high_deviation_streak",
+                "detail": f"最近 {streak} 天偏离度均 ≥ 50，建议下调每日任务量、优先保 1 个主线产出。",
+                "since": tail[0].get("date", ""),
+            })
+
+    # 规则 2：反复未完成
+    counter: dict[str, dict] = {}
+    for e in recent:
+        seen_in_day = set()
+        for item in e.get("incomplete", []):
+            key = _norm_task_key(item)
+            if not key or key in seen_in_day:
+                continue
+            seen_in_day.add(key)
+            slot = counter.setdefault(key, {"count": 0, "sample": item})
+            slot["count"] += 1
+    for key, slot in counter.items():
+        if slot["count"] >= streak:
+            rules.append({
+                "pattern": f"recurring_incomplete:{key}",
+                "detail": f"「{slot['sample']}」在最近 {len(recent)} 天里有 {slot['count']} 天未完成，建议减量/拆细/前置到精力高的时段。",
+                "since": recent[0].get("date", ""),
+            })
+
+    sem.set(ADJUSTMENTS_KEY, {"rules": rules, "updated_at": _iso_now()})
+    return {"distilled": True, "n_reflections": len(recent), "rules": rules}
+
+
+def get_active_adjustments(sem: SemanticMemory) -> list[str]:
+    """读出当前生效的调整建议文案列表（供 today_advice 等消费）。"""
+    data = sem.get(ADJUSTMENTS_KEY) or {}
+    return [r.get("detail", "") for r in data.get("rules", []) if r.get("detail")]
+
+
 if __name__ == "__main__":
     epi = EpisodicMemory()
     sem = SemanticMemory()

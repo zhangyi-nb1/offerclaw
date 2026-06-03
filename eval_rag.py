@@ -29,10 +29,10 @@ import chromadb
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE)
 
-from rag_tools import get_embedding  # noqa: E402
+from rag_tools import get_collection_name, get_embedding  # noqa: E402
 
 DB_DIR = os.path.join(BASE, "chroma_db")
-COLLECTION_NAME = "offerclaw_docs"
+COLLECTION_NAME = get_collection_name()
 EVAL_SET_PATH = os.path.join(BASE, "tests", "rag_eval_set.json")
 
 

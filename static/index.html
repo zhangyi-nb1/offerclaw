@@ -742,9 +742,19 @@
             </div>
             <span class="status-dot" id="dailyStatus">未加载</span>
           </div>
-          <textarea class="textarea" id="dailyInput" placeholder="今天做了什么？例：完成 RAG eval Recall@5 跑到 0.96"></textarea>
+          <select class="input" id="dailyTag" style="margin-bottom:8px">
+            <option value="">今日主线标签（可选）…</option>
+            <option value="补技能">补技能</option>
+            <option value="补项目">补项目</option>
+            <option value="补面试">补面试</option>
+            <option value="岗位调研">岗位调研</option>
+            <option value="投递准备">投递准备</option>
+          </select>
+          <textarea class="textarea" id="dailyDone" placeholder="已完成（每行一项）：例\n看完 RAG 全链路\n写了分块去重代码"></textarea>
+          <textarea class="textarea" id="dailyTodo" placeholder="未完成（每行一项，可空）" style="margin-top:8px;min-height:48px"></textarea>
+          <textarea class="textarea" id="dailyNotes" placeholder="学习留痕 / 笔记 / 链接（可空）" style="margin-top:8px;min-height:48px"></textarea>
           <div class="card-actions">
-            <button class="btn" onclick="appendDaily()">追加到今日</button>
+            <button class="btn" onclick="appendStructuredDaily()">结构化留痕</button>
             <button class="btn secondary" onclick="loadDaily()">刷新近 7 天</button>
           </div>
           <div class="card-body" id="dailyBody" style="margin-top:14px"></div>
@@ -1004,19 +1014,30 @@ async function loadDaily(){
   }
 }
 
-async function appendDaily(){
-  const inp = document.getElementById('dailyInput');
-  const text = inp.value.trim();
-  if (!text) { showToast('请输入今日记录'); return; }
+function _lines(id){
+  return (document.getElementById(id).value || '')
+    .split('\n').map(s => s.trim()).filter(Boolean);
+}
+async function appendStructuredDaily(){
+  const tag = document.getElementById('dailyTag').value;
+  const done = _lines('dailyDone');
+  const todo = _lines('dailyTodo');
+  const notes = (document.getElementById('dailyNotes').value || '').trim();
+  if (!tag && !done.length && !todo.length && !notes) {
+    showToast('请至少填一项'); return;
+  }
   setStatus('dailyStatus', 'run', '写入中');
   try {
-    const r = await fetch('/api/daily', {
+    const r = await fetch('/api/daily/log', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({text: text})
+      body: JSON.stringify({tag, done, todo, notes})
     });
     if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
-    inp.value = '';
-    showToast('✓ 已追加');
+    const d = await r.json();
+    document.getElementById('dailyDone').value = '';
+    document.getElementById('dailyTodo').value = '';
+    document.getElementById('dailyNotes').value = '';
+    showToast(`✓ 已留痕（完成 ${d.done_count} / 未完成 ${d.todo_count}）`);
     await loadDaily();
   } catch (e) {
     showToast('写入失败：' + e.message);
@@ -1086,22 +1107,45 @@ async function buildResumeForJD(){
   }
 }
 
-// ===== RAG ask =====
+// ===== RAG ask（流式 · 知识库优先）=====
 async function ask(){
   const q = document.getElementById('askInput').value.trim();
   const ans = document.getElementById('askAns');
   const ansBody = document.getElementById('askAnsBody');
   if (!q) { showToast('请输入问题'); return; }
   ans.classList.add('show');
-  ansBody.innerHTML = '<div class="skeleton"></div><div class="skeleton mid"></div>';
+  ansBody.textContent = '检索中…';
+  let header = '', body = '';
+  const render = () => { ansBody.textContent = header + body; };
   try {
-    const r = await fetch('/api/query', {
+    const r = await fetch('/api/stream', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({query: q, top_k: 3})
+      body: JSON.stringify({query: q, top_k: 5})
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
-    ansBody.textContent = d.answer || JSON.stringify(d, null, 2);
+    if (!r.ok || !r.body) throw new Error('HTTP ' + r.status);
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream:true});
+      const parts = buf.split('\n\n'); buf = parts.pop();
+      for (const block of parts) {
+        const isMeta = block.includes('event: meta');
+        const m = block.match(/data: (.*)$/s);
+        if (!m) continue;
+        let obj; try { obj = JSON.parse(m[1]); } catch { continue; }
+        if (isMeta) {
+          if (obj.in_kb === false) header = '⚠️ 知识库未覆盖 · 以下为通用知识回答\n\n';
+          else if (obj.sources && obj.sources.length) header = '✓ 命中知识库 · 来源：' + obj.sources.join('、') + '\n\n';
+          render();
+        } else if (obj.delta) {
+          body += obj.delta; render();
+        }
+      }
+    }
+    if (!body) render();
   } catch (e) {
     ansBody.textContent = '查询失败：' + e.message;
   }
