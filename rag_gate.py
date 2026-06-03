@@ -17,14 +17,38 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-RAG_RELEVANCE_MAX_DIST = float(os.environ.get("RAG_RELEVANCE_MAX_DIST", "0.92"))
-# 词面救回上限：1.15（标定后收紧，原 1.20）。
-# 理由：真需要救回的"react→ReAct"在 1.0155；负样本（Vue3/Spring/Git 仅被提及）在 1.16+。
-# 1.15 落在两者之间，既保住 react，又挡掉"Git"这类仅被提及词的误命中。
-RAG_LEXICAL_RESCUE_DIST = float(os.environ.get("RAG_LEXICAL_RESCUE_DIST", "1.15"))
-# 弱相关上限：未命中但 dist 在此内的片段，作为"可能相关背景"喂给兜底回答；
-# 超过则视为完全无关，兜底走纯通用知识。
-RAG_WEAK_CONTEXT_DIST = float(os.environ.get("RAG_WEAK_CONTEXT_DIST", "1.30"))
+# 距离阈值是 **模型相关** 的（不同 embedding 的距离尺度不同）。
+# 按 provider/model 给标定过的默认值；env(RAG_RELEVANCE_MAX_DIST 等)可覆盖。
+# - 百炼 text-embedding-v3/v4：命中 0.5~0.8 / 假命中 ≥1.04 → strong 0.92, rescue 1.15
+# - 本地 bge-base-zh-v1.5：命中 ≤0.74 / 假命中 ≥0.91（react 0.645 已被向量命中，无需词面救回）
+#   → strong 0.85, rescue 0.85（即关闭词面救回）, weak 1.10
+_THRESHOLD_DEFAULTS = {
+    "bailian":  {"strong": 0.92, "rescue": 1.15, "weak": 1.30},
+    "zhipu":    {"strong": 0.92, "rescue": 1.15, "weak": 1.30},
+    "local":    {"strong": 0.85, "rescue": 0.85, "weak": 1.10},
+    "_default": {"strong": 0.92, "rescue": 1.15, "weak": 1.30},
+}
+
+
+def _thresholds() -> dict:
+    """返回当前 embedding 模型的距离阈值（env 覆盖 > provider 标定默认）。"""
+    try:
+        from rag_tools import get_embedding_config
+        provider = get_embedding_config().get("provider", "_default")
+    except Exception:
+        provider = "_default"
+    base = _THRESHOLD_DEFAULTS.get(provider, _THRESHOLD_DEFAULTS["_default"])
+    def ov(name, default):
+        v = os.environ.get(name)
+        try:
+            return float(v) if v else default
+        except ValueError:
+            return default
+    return {
+        "strong": ov("RAG_RELEVANCE_MAX_DIST", base["strong"]),
+        "rescue": ov("RAG_LEXICAL_RESCUE_DIST", base["rescue"]),
+        "weak": ov("RAG_WEAK_CONTEXT_DIST", base["weak"]),
+    }
 # RAG 合成用更快的模型（grounded 总结/兜底都够用），默认 qwen-turbo；可用 RAG_SYNTH_MODEL 覆盖。
 RAG_SYNTH_MODEL = os.environ.get("RAG_SYNTH_MODEL", "qwen-turbo")
 
@@ -130,20 +154,21 @@ def _retrieve_and_classify(question: str, top_k: int = 5) -> dict:
     metas = res.get("metadatas", [[]])[0]
     dists = res.get("distances", [[]])[0]
 
+    th = _thresholds()
     best = dists[0] if dists else 99.0
     keywords = query_keywords(question)
-    rescue_chunks = [d for d, dist in zip(docs, dists) if dist <= RAG_LEXICAL_RESCUE_DIST]
-    lexical_rescued = best <= RAG_LEXICAL_RESCUE_DIST and lexical_hit(keywords, rescue_chunks)
-    in_kb = bool(docs) and (best <= RAG_RELEVANCE_MAX_DIST or lexical_rescued)
+    rescue_chunks = [d for d, dist in zip(docs, dists) if dist <= th["rescue"]]
+    lexical_rescued = best <= th["rescue"] and lexical_hit(keywords, rescue_chunks)
+    in_kb = bool(docs) and (best <= th["strong"] or lexical_rescued)
 
     if in_kb:
-        cutoff = RAG_RELEVANCE_MAX_DIST if best <= RAG_RELEVANCE_MAX_DIST else RAG_LEXICAL_RESCUE_DIST
+        cutoff = th["strong"] if best <= th["strong"] else th["rescue"]
         relevant = [(d, m) for d, m, dist in zip(docs, metas, dists) if dist <= cutoff]
         chunks = [d for d, _m in relevant]
         sources = sorted({(m or {}).get("source", "?") for _d, m in relevant})
-        matched_by = "vector" if best <= RAG_RELEVANCE_MAX_DIST else "lexical_rescue"
+        matched_by = "vector" if best <= th["strong"] else "lexical_rescue"
     else:
-        chunks = [d for d, dist in zip(docs, dists) if dist <= RAG_WEAK_CONTEXT_DIST]  # 弱相关背景
+        chunks = [d for d, dist in zip(docs, dists) if dist <= th["weak"]]  # 弱相关背景
         sources = []
         matched_by = None
     return {"in_kb": in_kb, "chunks": chunks, "sources": sources,
@@ -245,14 +270,15 @@ def gated_query(question: str, top_k: int = 5) -> dict:
         metas = res.get("metadatas", [[]])[0]
         dists = res.get("distances", [[]])[0]
 
+        th = _thresholds()
         best = dists[0] if dists else 99.0
         keywords = query_keywords(question)
-        rescue_chunks = [d for d, dist in zip(docs, dists) if dist <= RAG_LEXICAL_RESCUE_DIST]
-        lexical_rescued = best <= RAG_LEXICAL_RESCUE_DIST and lexical_hit(keywords, rescue_chunks)
-        in_kb = bool(docs) and (best <= RAG_RELEVANCE_MAX_DIST or lexical_rescued)
+        rescue_chunks = [d for d, dist in zip(docs, dists) if dist <= th["rescue"]]
+        lexical_rescued = best <= th["rescue"] and lexical_hit(keywords, rescue_chunks)
+        in_kb = bool(docs) and (best <= th["strong"] or lexical_rescued)
 
         if in_kb:
-            cutoff = RAG_RELEVANCE_MAX_DIST if best <= RAG_RELEVANCE_MAX_DIST else RAG_LEXICAL_RESCUE_DIST
+            cutoff = th["strong"] if best <= th["strong"] else th["rescue"]
             relevant = [(d, m) for d, m, dist in zip(docs, metas, dists) if dist <= cutoff]
             chunks = [d for d, _m in relevant]
             sources = sorted({(m or {}).get("source", "?") for _d, m in relevant})
@@ -261,13 +287,13 @@ def gated_query(question: str, top_k: int = 5) -> dict:
                 answer = "（无 LLM key，返回原始片段）\n\n" + "\n---\n".join(c[:300] for c in chunks)
             return {
                 "query": question, "in_kb": True, "mode": "kb_grounded",
-                "matched_by": "vector" if best <= RAG_RELEVANCE_MAX_DIST else "lexical_rescue",
+                "matched_by": "vector" if best <= th["strong"] else "lexical_rescue",
                 "answer": answer, "sources": sources,
                 "best_distance": round(best, 4), "retrieval_count": len(chunks),
             }
 
         # 未命中 → 兜底：弱相关片段（dist 在弱相关带内）+ 通用知识
-        weak = [d for d, dist in zip(docs, dists) if dist <= RAG_WEAK_CONTEXT_DIST]
+        weak = [d for d, dist in zip(docs, dists) if dist <= th["weak"]]
         ans = synthesize_fallback_answer(question, weak)
         if ans is None:
             ans = "（无 LLM key，无法作答）"

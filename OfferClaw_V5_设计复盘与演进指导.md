@@ -613,4 +613,66 @@ $PYTHON $CLI doctor                   # 完整工程体检
 
 ---
 
+## 九、增量 RAG + 项目先验 + 计划微信推送（2026-06-03）
+
+按用户"理想 OfferClaw"诉求做的三项改造：
+
+### 9.1 RAG 增量更新（不重建、不破坏原有、自动添加先确认）
+- `rag_ingest.py --add <file>`：增量加单文件到现有 collection，**不重建、不动已有内容**。
+- `knowledge_crawler.py promote --to X --ingest`：审核通过 → 移入正式库 → 增量入库，立即可检索。
+- **自动添加先确认**：模型想补资料 → 先问用户 → 同意才 crawl → 落 _pending → 用户审核 → promote。
+- 配置漂移检测（doctor）：换了 embedding 模型却没重建索引时，明确告警（解决换模型静默指向空库）。
+
+### 9.2 换模型策略（应对免费额度耗尽频繁切换）
+- **换 LLM = 零成本**（改 .env.local 即可）；**换 embedding = 必须重建索引**（向量空间不兼容）。
+- 每个 provider/model/dim 独立 collection：切回旧模型若 collection 还在则**免重建**。
+- 当前：v4 额度耗尽 → 已用 v3 重建（861 chunks），v4 collection 保留备切回。
+- 长期建议：embedding 换本地模型（bge 等）根治额度问题（留待用户决定，需 torch）。
+
+### 9.3 项目先验 + 只读边界
+- `knowledge_base/project_context/`（新 source_type=project_context）：放用户已有项目现状。
+  已建 `localflow.md`（基于真实 README：定位/技术栈/已完成模块/进度/学习主题对应）。
+- `plan_gen.load_project_context()` 注入规划：实战缺口**优先编排为"在 LocalFlow 上推进的下一步"**，
+  不让用户从零重造；措辞"建议你…"。**硬边界**：OfferClaw 对实战项目只读，绝不代为编码/改文件/提交。
+- 也支持"从零搭新项目学习"（用户明确要求时）。SOUL.md 已写入只读硬边界。
+- 验证：重跑 plan，计划已从"重造 RAG"改为"在 LocalFlow 加 RAG recipe/MCP工具/完善 verify-rollback"。
+
+### 9.4 计划生成/更新推送微信
+- `offerclaw_cli.py plan ['缺口/调整']`：生成 4 周计划（接 RAG + 项目先验），返回 `wechat_summary`
+  （每周主题 + 资源数 + 完整计划路径）+ `saved_path` + `full_plan`。
+- SKILL.md：生成/更新计划后**把 wechat_summary 推送给用户**；模型主动改进或用户要求调整后，
+  重新生成并再次推送，让用户直观看到改动。
+
+测试：共 203 passed；doctor 12 OK。
+
+## 十、本地向量模型 + 图转文多模态 RAG（2026-06-03）
+
+针对"稳定向量模型 + 图片/公式支持"诉求：
+
+### 10.1 本地 embedding（根治额度，稳定）
+- rag_tools 新增 `local` provider（sentence-transformers），别名 bge/st/hf 等。
+- 默认 **BAAI/bge-base-zh-v1.5**（768维，~400MB）；加载优先 ModelScope（国内快、已缓存秒回），
+  退 HuggingFace。bge-m3（2.3GB）可选但国内下载慢，留作升级项。
+- 切到本地后：**永久免费、无额度、无网络**。已重建索引（867 chunks，本地 collection）。
+- 模型相关阈值：rag_gate `_thresholds()` 按 provider 标定（本地 bge strong=0.85；百炼 0.92），
+  env 可覆盖。换模型自动用对应阈值，不会再用错尺度。
+- 公式：算法章节本就是 LaTeX 文本，text embedding 正常处理。
+- 验证：本地 bge 分域召回 100%、纯度 91%、门槛 5/5+5/5；react→ReAct 变为原生向量命中(0.64)。
+
+### 10.2 图转文（图片/图片版公式进 RAG）
+- image_caption.py：ingest 前用 **qwen-vl**(VL_MODEL) 把 `![](img)` → `[图: 描述+OCR]`，
+  按图片身份缓存到 _image_captions.json（重建复用，不重复调用）。
+- 本地图 base64、http 图直传；失败/缺失降级删图（不杜撰）。`IMAGE_CAPTION=1` 开启。
+- split 改为保留 `[图: …]` 描述（之前会被剥离）。
+- 验证：LoRA 重参数化图被正确转文（含 W∈R^{d×d}、A=N(0,σ²) 等公式 OCR）。
+- 注：全量 390 图转文需一次性 qwen-vl 调用（较慢/耗额度），按需开启 IMAGE_CAPTION=1 重建。
+
+### 10.3 换模型须知（沉淀）
+- **换 LLM 零成本**；**换 embedding 必须重建索引**（向量空间不兼容），各模型独立 collection。
+- doctor 有配置漂移告警；本地 embedding 是最省心的稳定选择。
+
+测试：共 210 passed；doctor 12 OK。
+
+---
+
 **本文档是活文件**。每完成一个 P 级阶段，回来更新对应状态。

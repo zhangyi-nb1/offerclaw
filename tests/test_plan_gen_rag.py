@@ -152,3 +152,31 @@ def test_lexical_hit_false_when_absent():
 
 def test_lexical_hit_false_when_no_keywords():
     assert rg.lexical_hit([], ["任意内容"]) is False
+
+
+# ---- 项目先验 + 计划微信摘要（纯逻辑）----
+
+def test_load_project_context_includes_localflow():
+    pc = plan_gen.load_project_context()
+    # 已建 project_context/localflow.md → 应含项目名 + 只读边界
+    assert "LocalFlow" in pc
+    assert "只读" in pc
+
+
+def test_build_messages_injects_project_directive():
+    msgs = plan_gen.build_messages(
+        "画像", "prompt", "log", "policy", "rules", "缺Agent项目经历",
+        resources_block="", project_context="LocalFlow 现状...")
+    user = msgs[1]["content"]
+    sys_c = msgs[0]["content"]
+    assert "已有项目" in sys_c or "已有项目" in user
+    assert "建议你" in sys_c  # 只读措辞约束
+    # 实战编排硬性要求出现在 user 任务里
+    assert "在已有项目上推进" in user
+
+
+def test_build_messages_no_project_directive_when_empty():
+    msgs = plan_gen.build_messages(
+        "画像", "prompt", "log", "policy", "rules", "gaps",
+        resources_block="", project_context="")
+    assert "实战编排硬性要求" not in msgs[1]["content"]

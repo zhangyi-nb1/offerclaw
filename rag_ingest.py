@@ -59,16 +59,29 @@ DEFAULT_FILES = [
 ]
 
 
+_KB_SUBDIR_TYPE = {
+    "career_paths": "career_knowledge",
+    "experience_posts": "experience",
+    "learning_resources": "resource",
+    "project_context": "project_context",   # 已有项目先验（localflow 等），只读上下文
+}
+
+
+def _infer_source_type(path: str) -> str:
+    """按文件所在 knowledge_base 子目录推断 source_type；推断不出按 doc。"""
+    norm = path.replace("\\", "/")
+    for subdir, st in _KB_SUBDIR_TYPE.items():
+        if f"knowledge_base/{subdir}/" in norm:
+            return st
+    return "doc"
+
+
 def _discover_knowledge_base() -> list[tuple[str, str]]:
     """Scan knowledge_base/ for .md files (excluding templates and README)."""
     kb_dir = os.path.join(BASE_DIR, "knowledge_base")
     if not os.path.isdir(kb_dir):
         return []
-    type_map = {
-        "career_paths": "career_knowledge",
-        "experience_posts": "experience",
-        "learning_resources": "resource",
-    }
+    type_map = dict(_KB_SUBDIR_TYPE)
     found = []
     for subdir, source_type in type_map.items():
         dirpath = os.path.join(kb_dir, subdir)
@@ -118,6 +131,18 @@ def ingest_file(
         raw_text = f.read()
 
     print(f"  [READ] {len(raw_text)} 字符, {raw_text.count(chr(10))} 行")
+
+    # Step 1.5: 图转文（IMAGE_CAPTION=1 时）—— ![](img) → [图: 描述+OCR]，让图片可检索
+    try:
+        from image_caption import caption_enabled, caption_markdown
+        if caption_enabled() and "![" in raw_text:
+            st = {}
+            raw_text = caption_markdown(raw_text, md_path=full_path, stats=st)
+            if st.get("captioned") or st.get("cached"):
+                print(f"  [图转文] 新描述 {st.get('captioned',0)} · 缓存命中 "
+                      f"{st.get('cached',0)} · 丢弃 {st.get('dropped',0)}")
+    except Exception as _e:
+        print(f"  [图转文] 跳过（{_e}）")
 
     # Step 2: 分块
     chunks = split_markdown_document(raw_text)
@@ -223,6 +248,8 @@ def main():
     parser = argparse.ArgumentParser(description="OfferClaw RAG Ingest")
     parser.add_argument("--files", nargs="+", help="指定要 ingest 的文件名")
     parser.add_argument("--rebuild", action="store_true", help="清空旧库重建")
+    parser.add_argument("--add", help="增量添加单个文件到现有库（不重建、不影响原有内容）")
+    parser.add_argument("--source-type", help="配合 --add 指定 source_type（默认按子目录推断）")
     parser.add_argument(
         "--collection",
         default=COLLECTION_NAME,
@@ -231,7 +258,12 @@ def main():
     args = parser.parse_args()
     collection_name = args.collection
 
-    if args.files:
+    if args.add:
+        # 增量模式：只把这一个文件加入现有 collection，不删除/不重建任何已有内容
+        st = args.source_type or _infer_source_type(args.add)
+        files = [(args.add, st)]
+        print(f"[增量] 仅添加 1 个文件：{args.add}（source_type={st}）")
+    elif args.files:
         files = [(f, "doc") for f in args.files]
     else:
         kb_files = _discover_knowledge_base()
@@ -250,8 +282,8 @@ def main():
     # 初始化 ChromaDB
     client = chromadb.PersistentClient(path=DB_DIR)
 
-    # 处理 collection
-    if args.rebuild:
+    # 处理 collection（--add 增量模式下绝不重建，保护已有内容）
+    if args.rebuild and not args.add:
         print("\n[REBUILD] 清空旧 collection...")
         try:
             client.delete_collection(collection_name)

@@ -479,8 +479,12 @@ def cmd_from_text(url: str, text_file: str) -> dict:
     return _score_and_save(text, url, origin="浏览器采集")
 
 
-def cmd_promote(pending_file: str, to_subdir: str) -> dict:
-    """把审核通过的 _pending 文件提升到正式知识库子目录。"""
+def cmd_promote(pending_file: str, to_subdir: str, ingest: bool = False) -> dict:
+    """把审核通过的 _pending 文件提升到正式知识库子目录。
+
+    ``ingest=True`` 时**增量**入库（rag_ingest --add，不重建、不影响原有内容），
+    提升后立即可检索；否则只移动文件，由调用方稍后增量入库。
+    """
     if to_subdir not in VALID_SUBDIRS:
         return {"status": "error", "error": f"--to 必须是 {sorted(VALID_SUBDIRS)} 之一"}
     src = pending_file if os.path.isabs(pending_file) else os.path.join(BASE_DIR, pending_file)
@@ -500,13 +504,27 @@ def cmd_promote(pending_file: str, to_subdir: str) -> dict:
     with open(dst, "w", encoding="utf-8") as f:
         f.write(content)
     os.remove(src)
-    return {
+
+    out = {
         "status": "ok",
         "promoted_to": os.path.relpath(dst, BASE_DIR),
         "source_type": expected_st,
         "title": meta.get("title", ""),
-        "next": "运行 python rag_ingest.py --rebuild 重建索引使其可检索",
     }
+    if ingest:
+        import subprocess
+        rel = os.path.relpath(dst, BASE_DIR)
+        proc = subprocess.run(
+            [os.path.join(BASE_DIR, ".venv/bin/python"), "rag_ingest.py", "--add", rel],
+            cwd=BASE_DIR, capture_output=True, text=True, timeout=300,
+        )
+        tail = (proc.stdout or "").strip().splitlines()[-1:] or [""]
+        out["ingest"] = "ok" if proc.returncode == 0 else "failed"
+        out["ingest_detail"] = tail[0]
+        out["next"] = "已增量入库，可直接检索（未重建、未影响原有内容）"
+    else:
+        out["next"] = "增量入库：python rag_ingest.py --add " + os.path.relpath(dst, BASE_DIR)
+    return out
 
 
 def cmd_score(pending_file: str) -> dict:
@@ -593,6 +611,7 @@ def main():
     sub.add_parser("list")
     p_prom = sub.add_parser("promote"); p_prom.add_argument("file")
     p_prom.add_argument("--to", required=True, choices=sorted(VALID_SUBDIRS))
+    p_prom.add_argument("--ingest", action="store_true", help="提升后立即增量入库（不重建）")
     args = parser.parse_args()
 
     try:
@@ -611,7 +630,7 @@ def main():
     elif args.cmd == "list":
         _out(cmd_list_pending())
     elif args.cmd == "promote":
-        _out(cmd_promote(args.file, args.to))
+        _out(cmd_promote(args.file, args.to, ingest=args.ingest))
     else:
         parser.print_help()
         sys.exit(1)

@@ -22,3 +22,7 @@ jsonschema>=4.0.0
 
 # JD 抓取 SPA 兜底
 playwright>=1.60.0
+
+# 本地 embedding（local provider，可选；不用本地向量可不装）
+sentence-transformers>=3.0
+modelscope>=1.9   # 国内下载向量模型用，HF 不通时回退

@@ -140,12 +140,20 @@ def check_chroma() -> None:
 
         collection_name = get_collection_name()
         client = chromadb.PersistentClient(path=str(db))
-        col = client.get_collection(collection_name)
-        count = col.count()
-        if count > 0:
-            ok(f"当前 collection `{collection_name}` 可用（{count} chunks）")
+        all_cols = {c.name: c.count() for c in client.list_collections()}
+
+        if collection_name in all_cols and all_cols[collection_name] > 0:
+            ok(f"当前 collection `{collection_name}` 可用（{all_cols[collection_name]} chunks）")
         else:
-            warn(f"当前 collection `{collection_name}` 为空 → 运行 `python rag_ingest.py --rebuild`")
+            # 配置漂移检测：当前(配置)collection 缺/空，但别的 embedding 模型 collection 有数据
+            others = {n: c for n, c in all_cols.items() if n != collection_name and c > 0}
+            if others:
+                detail = "，".join(f"`{n}`({c})" for n, c in others.items())
+                warn(f"embedding 配置漂移：当前配置指向 `{collection_name}`（空/缺），"
+                     f"但数据在 {detail}。说明你换了 embedding 模型却未重建索引 → "
+                     f"`python rag_ingest.py --rebuild`（用新模型重建），或把 .env.local 改回有数据的模型")
+            else:
+                warn(f"当前 collection `{collection_name}` 为空/缺 → 运行 `python rag_ingest.py --rebuild`")
     except Exception as exc:
         warn(f"当前 collection 不可用 → {exc}")
 

@@ -170,3 +170,17 @@ def test_parse_structured_log_freeform_fallback():
     assert tag == ""
     assert done == [] and todo == []
     assert notes == "今天就是随便记一句"
+
+
+# ---- 计划微信摘要抽取 ----
+
+def test_extract_weekly_themes():
+    plan = "前言\nWeek 1 (06-03 → 06-09) 主题：RAG 基础\n日任务\nWeek 2 (06-10 → 06-16) 主题：Agent\n"
+    themes = oc._extract_weekly_themes(plan)
+    assert len(themes) == 2
+    assert "RAG 基础" in themes[0]
+
+
+def test_default_gaps_from_profile_nonempty():
+    g = oc._default_gaps_from_profile()
+    assert "RAG" in g and "Agent" in g

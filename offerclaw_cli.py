@@ -61,6 +61,60 @@ def cmd_match(jd_text):
     })
 
 
+def _default_gaps_from_profile():
+    """无显式缺口时，按画像现状给一份默认缺口（大模型应用工程师方向）。"""
+    return (
+        "技能缺口：\n"
+        "- Python 工程能力需系统提升\n"
+        "- 缺少 RAG / 向量检索的系统知识与实战\n"
+        "- 缺少 Agent / 工具调用 / 工作流编排的项目经历\n"
+        "经历缺口：\n"
+        "- 缺少端到端、可写进简历的大模型应用开发项目"
+    )
+
+
+def _extract_weekly_themes(plan_md):
+    """从计划正文抽取每周主题行，做微信友好摘要。"""
+    import re
+    themes = []
+    for ln in plan_md.splitlines():
+        m = re.match(r"\s*(Week\s*\d+[^\n]*主题[:：][^\n]+)", ln)
+        if m:
+            themes.append(m.group(1).strip())
+    return themes
+
+
+def cmd_plan(gaps=None):
+    """生成 4 周学习计划（接 RAG 资源 + 项目先验），返回微信友好摘要 + 完整计划路径。
+
+    供"给我制定/更新学习计划"在微信触发：OpenClaw 据返回的 wechat_summary 推送给用户，
+    full_plan 已落盘到 plans/。
+    """
+    from plan_gen import prepare_plan_messages, call_llm_plain, append_resources_appendix, save_plan
+    gaps = (gaps or "").strip() or _default_gaps_from_profile()
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        _json_out({"status": "error", "error": "未配置 OPENAI_API_KEY"})
+        return
+    messages, resources = prepare_plan_messages(gaps)
+    plan = call_llm_plain(messages, api_key, max_tokens=3500)
+    plan = append_resources_appendix(plan, resources)
+    path = save_plan(plan)
+    themes = _extract_weekly_themes(plan)
+    # 微信友好摘要：每周主题 + 资源数 + 完整计划位置
+    lines = ["📚 学习计划已生成（4 周）："]
+    lines += [f"  {t}" for t in themes] if themes else ["  （详见完整计划）"]
+    lines.append(f"📎 参考资源 {len(resources)} 份，完整计划：{os.path.relpath(path, BASE_DIR)}")
+    _json_out({
+        "status": "ok",
+        "saved_path": path,
+        "weekly_themes": themes,
+        "resource_count": len(resources),
+        "wechat_summary": "\n".join(lines),
+        "full_plan": plan,
+    })
+
+
 def cmd_query(question):
     """KB 命中才答：检索→相关性门槛→命中则基于 KB 合成答案+标注来源；未命中坦白说没有。
 
@@ -193,13 +247,15 @@ def cmd_health():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python offerclaw_cli.py {today|profile|match|query|daily|log|review|doctor|health} [args]")
+        print("Usage: python offerclaw_cli.py {today|profile|match|query|plan|daily|log|review|doctor|health} [args]")
         sys.exit(1)
 
     cmd = sys.argv[1]
 
     if cmd == "today":
         cmd_today()
+    elif cmd == "plan":
+        cmd_plan(sys.argv[2] if len(sys.argv) > 2 else None)
     elif cmd == "profile":
         cmd_profile()
     elif cmd == "match":

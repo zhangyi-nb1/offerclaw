@@ -46,6 +46,8 @@ DAILY_LOG_PATH = "daily_log.md"
 SOURCE_POLICY_PATH = "source_policy.md"
 TARGET_RULES_PATH = "target_rules.md"
 OUTPUT_DIR = "plans"
+PROJECT_CONTEXT_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "knowledge_base", "project_context")
 
 
 def read_text(path: str) -> str:
@@ -53,6 +55,22 @@ def read_text(path: str) -> str:
         raise FileNotFoundError(f"必需文件缺失：{path}")
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def load_project_context() -> str:
+    """读取 knowledge_base/project_context/ 下的"已有项目现状"先验，拼成上下文块。
+
+    这些是用户自有的在建项目（如 LocalFlow），OfferClaw **只读**：规划时据此建议
+    "在现有项目上推进/扩展"，不让用户从零重造，也绝不代为开发。无则返回空串。
+    """
+    if not os.path.isdir(PROJECT_CONTEXT_DIR):
+        return ""
+    blocks = []
+    for fn in sorted(os.listdir(PROJECT_CONTEXT_DIR)):
+        if fn.endswith(".md") and not fn.startswith("_"):
+            with open(os.path.join(PROJECT_CONTEXT_DIR, fn), encoding="utf-8") as f:
+                blocks.append(f.read())
+    return "\n\n".join(blocks)
 
 
 def read_gaps(args) -> str:
@@ -264,13 +282,14 @@ def format_resources_block(resources: list[dict]) -> str:
 
 def build_messages(profile: str, plan_prompt: str, daily_log: str,
                    source_policy: str, target_rules: str, gaps: str,
-                   resources_block: str = "") -> list:
+                   resources_block: str = "", project_context: str = "") -> list:
     """组装要发给 LLM 的 messages。
 
     设计：把 5 份依赖文件作为 system 上下文，缺口清单作为 user 消息。
     LLM 内部按 plan_prompt 的 9 步流程执行。
-    P1：若 ``resources_block`` 非空，追加 RAG 检索到的真实学习资源，
-    要求 LLM 在计划中优先引用这些资源（标注来源文件名），而非凭空编造。
+    P1：若 ``resources_block`` 非空，追加 RAG 检索到的真实学习资源。
+    项目先验：若 ``project_context`` 非空，追加用户已有项目现状，要求把实战任务
+    优先落到"在已有项目上推进"，且 OfferClaw 只建议不动手（只读）。
     """
     system_content = (
         "你是 OfferClaw，部署在长期会话中的求职作战官。\n"
@@ -290,9 +309,30 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
             "必须引用对应资源并标注「来源：<文件名>」；不要编造不存在的资源链接。\n"
         )
 
+    if project_context:
+        system_content += (
+            f"\n========== 用户已有项目现状（只读先验）==========\n{project_context}\n"
+            "规划实战任务时的硬性要求：\n"
+            "1) 优先把实战落到上面已有项目上（基于其现状给出『下一步推进建议』），"
+            "不要让用户从零重造已有项目已具备的东西；\n"
+            "2) 你对这些项目【只读】——只给学习/推进建议，绝不代为编码、修改、提交，"
+            "措辞用『建议你/可以尝试』，不要写成『我来实现』；\n"
+            "3) 若用户明确表示想『从零搭一个新项目来学习』，则可另规划新建项目（二者都支持）。\n"
+        )
+
+    project_directive = ""
+    if project_context:
+        project_directive = (
+            "\n\n【实战编排硬性要求】用户已有在建项目（见 system 的『用户已有项目现状』）。\n"
+            "凡『缺项目经历 / 端到端项目 / Agent / 工具调用 / 工作流 / Harness』类实战缺口，"
+            "**必须编排为『在已有项目上推进的下一步』**（明确写出在哪个项目、加什么、达到什么），"
+            "不要让用户从零再造一个同类项目。每条这类任务用『建议你…』措辞，"
+            "OfferClaw 只建议、不代为开发。纯基础类缺口（如 Python 语法）可正常安排学习任务。"
+        )
     user_content = (
         "请按 plan_prompt.md 的 9 步流程，基于下面这份缺口清单生成 4 周计划。\n"
-        "今天日期是 " + datetime.date.today().isoformat() + "。\n\n"
+        "今天日期是 " + datetime.date.today().isoformat() + "。"
+        + project_directive + "\n\n"
         "========== 缺口清单 ==========\n" + gaps
     )
 
@@ -394,10 +434,11 @@ def prepare_plan_messages(gaps: str) -> tuple[list, list[dict]]:
     direction = _extract_direction(profile)
     resources = retrieve_learning_resources(gaps, direction=direction)
     resources_block = format_resources_block(resources)
+    project_context = load_project_context()
 
     messages = build_messages(
         profile, plan_prompt, daily_log, source_policy, target_rules,
-        gaps, resources_block=resources_block,
+        gaps, resources_block=resources_block, project_context=project_context,
     )
     return messages, resources
 

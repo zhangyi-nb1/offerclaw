@@ -63,6 +63,13 @@ def _normalise_provider(provider: str) -> str:
         "bigmodel": "zhipu",
         "openai": "openai_compatible",
         "openai_compat": "openai_compatible",
+        # 本地 sentence-transformers（bge 等）：无额度、无 API、向量稳定
+        "sentence_transformers": "local",
+        "sentencetransformers": "local",
+        "st": "local",
+        "bge": "local",
+        "huggingface": "local",
+        "hf": "local",
     }
     return aliases.get(p, p)
 
@@ -75,6 +82,8 @@ def _default_embedding_model(provider: str) -> str:
         return "text-embedding-v4"
     if provider == "openai_compatible":
         return "text-embedding-3-small"
+    if provider == "local":
+        return "BAAI/bge-m3"
     return "embedding-3"
 
 
@@ -89,6 +98,8 @@ def _default_embedding_base_url(provider: str) -> str:
 def _default_embedding_dimensions(provider: str, model: str) -> int | None:
     if provider == "bailian":
         return 1024
+    if provider == "local" and "bge-m3" in model:
+        return 1024
     if provider == "zhipu" and model == "embedding-3":
         return 2048
     return None
@@ -96,7 +107,11 @@ def _default_embedding_dimensions(provider: str, model: str) -> int | None:
 
 def _default_embedding_batch_size(provider: str) -> int:
     # 百炼 text-embedding 系列单次批量上限随模型变化，10 是稳妥默认值。
-    return 10 if provider == "bailian" else 50
+    if provider == "bailian":
+        return 10
+    if provider == "local":
+        return 32  # 本地批量无网络往返，可大一些
+    return 50
 
 
 def _optional_int(name: str, default: int | None = None) -> int | None:
@@ -168,6 +183,8 @@ def _get_provider_api_key(provider: str) -> str:
 
 def has_embedding_api_key() -> bool:
     cfg = get_embedding_config()
+    if cfg["provider"] == "local":
+        return True  # 本地模型无需 API key，始终"可用"
     return bool(_get_provider_api_key(cfg["provider"]))
 
 
@@ -268,6 +285,57 @@ def get_embedding(
     return get_embeddings_batch([text], model=model, max_retries=max_retries)[0]
 
 
+_LOCAL_MODEL_CACHE: dict = {}
+
+
+def _local_embed(texts: list[str], model: str) -> list[list[float]]:
+    """用本地 sentence-transformers 模型（bge-m3 等）编码，返回归一化向量。
+
+    模型按名缓存（首次加载较慢，之后常驻）。需 ``pip install sentence-transformers``。
+    """
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError as e:
+        raise RuntimeError(
+            "本地 embedding 需要 sentence-transformers：pip install sentence-transformers"
+        ) from e
+    m = _LOCAL_MODEL_CACHE.get(model)
+    if m is None:
+        m = _load_local_model(model)
+        _LOCAL_MODEL_CACHE[model] = m
+    vecs = m.encode(texts, normalize_embeddings=True, batch_size=32,
+                    show_progress_bar=False, convert_to_numpy=True)
+    return [v.tolist() for v in vecs]
+
+
+def _load_local_model(model: str):
+    """加载本地 SentenceTransformer 模型。
+
+    优先按给定名/路径从 HuggingFace 加载；国内 HF 不通时自动回退 ModelScope 快照
+    （EMBEDDING_MODEL 也可直接填本地快照绝对路径，跳过下载）。
+    """
+    import contextlib
+    import sys as _sys
+    from sentence_transformers import SentenceTransformer
+    if os.path.isdir(model):  # 直接给本地快照路径
+        with contextlib.redirect_stdout(_sys.stderr):
+            return SentenceTransformer(model)
+    # 国内优先 ModelScope（已缓存则秒回，未缓存下载也快）；不可用再退 HuggingFace
+    # 关键：把加载期所有打印重定向到 stderr，避免污染 stdout 的 JSON 输出
+    with contextlib.redirect_stdout(_sys.stderr):
+        try:
+            from modelscope import snapshot_download
+            return SentenceTransformer(snapshot_download(model))
+        except Exception:
+            pass
+        try:
+            return SentenceTransformer(model)
+        except Exception as e:
+            raise RuntimeError(
+                f"本地 embedding 模型 {model} 加载失败（ModelScope 与 HuggingFace 均不可用）：{e}"
+            ) from e
+
+
 def get_embeddings_batch(
     texts: list[str],
     model: str | None = None,
@@ -290,6 +358,11 @@ def get_embeddings_batch(
     batch_size = batch_size or int(cfg["batch_size"])
     model = model or cfg["model"]
     endpoint = cfg["endpoint"]
+
+    # 本地 sentence-transformers（bge 等）：本地推理，无 API/额度/限流
+    if provider == "local":
+        return _local_embed(texts, model)
+
     all_embeddings = []
 
     for i in range(0, len(texts), batch_size):
@@ -402,15 +475,14 @@ def split_markdown_document(
     # 对每个 section 切块
     import re as _re
     for title, section_lines in sections:
-        # 跳过纯图片素材段落（标题含"图片素材"）
-        if "图片素材" in title:
-            continue
+        # 注：原"图片素材"段落整段跳过的逻辑已移除——开启图转文后这些段含 [图:描述]
+        # 是真内容应保留；未开启时原始 ![](url) 行会被下面过滤掉、空段由 min_chars 兜底跳过。
 
-        # 过滤图片 markdown 行：直接丢弃，不保留占位
+        # 过滤未转文的原始图片行（![](url)）；保留 [图: …] 这类已转文的图片描述
+        # （图转文由 image_caption 在 ingest 前完成，描述含真实内容，应进入索引）
         cleaned_lines = [
             ln for ln in section_lines
             if not ln.strip().startswith("![")
-            and not _re.match(r"^\[图[:：]", ln.strip())
         ]
         section_text = "\n".join(cleaned_lines).strip()
 

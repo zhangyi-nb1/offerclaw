@@ -62,3 +62,8 @@ knowledge_base/_pending/
 
 # 知识库数据（含爬取的第三方图文，属本地私有数据，不入公开仓库）
 knowledge_base/
+
+# 图转文缓存（生成物）
+knowledge_base/_image_captions.json
+# .env 备份
+.env.local.bak*
