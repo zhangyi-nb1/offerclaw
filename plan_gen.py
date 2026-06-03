@@ -480,13 +480,43 @@ def append_resources_appendix(plan_text: str, resources: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def save_plan(content: str) -> str:
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+def _plans_dir() -> str:
+    """plans/ 目录的绝对路径（相对 plan_gen.py 所在目录，避免受 CWD 影响）。"""
+    base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, OUTPUT_DIR)
+
+
+def save_plan(content: str, edited_by_user: bool = False) -> str:
+    """落盘一份计划到 plans/。edited_by_user=True 时文件名带 _user 后缀，便于回读时标识。"""
+    out_dir = _plans_dir()
+    os.makedirs(out_dir, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = os.path.join(OUTPUT_DIR, f"plan_{ts}.md")
+    suffix = "_user" if edited_by_user else ""
+    path = os.path.join(out_dir, f"plan_{ts}{suffix}.md")
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
     return path
+
+
+def load_latest_plan() -> dict | None:
+    """读取 plans/ 下最新的 plan_*.md。返回 {content, path, filename, mtime, edited_by_user}，
+    没有任何计划时返回 None。"""
+    import glob
+    out_dir = _plans_dir()
+    files = glob.glob(os.path.join(out_dir, "plan_*.md"))
+    if not files:
+        return None
+    latest = max(files, key=os.path.getmtime)
+    with open(latest, encoding="utf-8") as f:
+        content = f.read()
+    fname = os.path.basename(latest)
+    return {
+        "content": content,
+        "path": latest,
+        "filename": fname,
+        "mtime": int(os.path.getmtime(latest)),
+        "edited_by_user": fname.endswith("_user.md"),
+    }
 
 
 def main():

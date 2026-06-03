@@ -150,5 +150,9 @@ def test_endpoint_resume_markdown(client):
 def test_endpoint_ui_console(client):
     r = client.get("/ui/console")
     assert r.status_code == 200
-    assert b"CareerFlow Stepper" in r.content
+    assert "CareerFlow 流程".encode("utf-8") in r.content
     assert b"/api/flow/run" in r.content
+    assert b'href="/ui?rev=latest"' in r.content
+    assert b'href="/ui"' not in r.content
+    assert b"Swagger" not in r.content
+    assert b"Health" not in r.content

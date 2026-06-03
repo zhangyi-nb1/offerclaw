@@ -19,8 +19,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Optional
+import base64
 import json
 import os
+import re
 import sys
 import datetime
 
@@ -29,6 +31,14 @@ import requests as _requests
 # 确保能找到 rag_tools
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
+DAILY_ATTACHMENT_DIR = os.path.join(BASE_DIR, "daily_attachments")
+DAILY_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+DAILY_ATTACHMENT_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif"}
+HTML_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
 
 # 自动加载 .env.local（本地私密 Key，不进 git），补充到环境变量
 _env_local = os.path.join(BASE_DIR, ".env.local")
@@ -75,6 +85,50 @@ def get_rag_agent():
         from rag_agent import RAGAgent
         _rag_agent = RAGAgent()
     return _rag_agent
+
+
+def _safe_daily_attachment_name(name: str) -> str:
+    """Return a local-safe file name while preserving the user's extension."""
+    raw = os.path.basename(name or "").strip()
+    stem, ext = os.path.splitext(raw)
+    ext = ext.lower()
+    stem = re.sub(r"[^0-9A-Za-z._\-\u4e00-\u9fff]+", "_", stem).strip("._-")
+    if not stem:
+        stem = "attachment"
+    return f"{stem[:80]}{ext}"
+
+
+def _unique_path(directory: str, filename: str) -> str:
+    stem, ext = os.path.splitext(filename)
+    candidate = os.path.join(directory, filename)
+    idx = 2
+    while os.path.exists(candidate):
+        candidate = os.path.join(directory, f"{stem}-{idx}{ext}")
+        idx += 1
+    return candidate
+
+
+def _decode_attachment_data(data_base64: str) -> bytes:
+    payload = (data_base64 or "").strip()
+    if "," in payload and payload.lower().startswith("data:"):
+        payload = payload.split(",", 1)[1]
+    try:
+        return base64.b64decode(payload, validate=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="附件内容不是有效的 base64") from exc
+
+
+def _html_file_response(filename: str) -> FileResponse:
+    """Serve local UI HTML without browser cache during active iteration."""
+    return FileResponse(
+        os.path.join(BASE_DIR, "static", filename),
+        headers=HTML_NO_CACHE_HEADERS,
+    )
+
+
+def _static_rev(filename: str) -> int:
+    path = os.path.join(BASE_DIR, "static", filename)
+    return int(os.path.getmtime(path))
 
 
 # =====================================================
@@ -136,6 +190,34 @@ class PlanResponse(BaseModel):
     saved_path: str = ""
 
 
+class CurrentPlanResponse(BaseModel):
+    has_plan: bool = False
+    content: str = ""
+    filename: str = ""
+    mtime: int = 0
+    edited_by_user: bool = False
+
+
+class PlanSaveRequest(BaseModel):
+    content: str
+    note: str = ""        # 用户编辑说明（可选），记入记忆事件
+
+
+class KBAddUrlRequest(BaseModel):
+    url: str
+
+
+class KBAddFileRequest(BaseModel):
+    name: str
+    content_base64: str = ""
+    text: str = ""        # 也允许直接传纯文本（二选一）
+
+
+class KBPromoteRequest(BaseModel):
+    pending_file: str     # _score_and_save 返回的 saved（相对路径）
+    to_subdir: str        # career_paths / experience_posts / learning_resources
+
+
 class DailyResponse(BaseModel):
     today_log: str = ""
     recent_summary: str = ""
@@ -151,6 +233,16 @@ class DailyLogStructuredRequest(BaseModel):
     done: list[str] = []
     todo: list[str] = []
     notes: str = ""
+
+
+class DailyAttachmentPayload(BaseModel):
+    name: str
+    content_type: str = ""
+    data_base64: str
+
+
+class DailyAttachmentRequest(BaseModel):
+    files: list[DailyAttachmentPayload] = []
 
 
 class ResumeResponse(BaseModel):
@@ -302,9 +394,15 @@ async def root():
 
 
 @app.get("/ui")
-async def ui():
+async def ui(request: Request):
     """OfferClaw 控制台（零依赖单页应用）。"""
-    return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
+    if not request.url.query:
+        return RedirectResponse(
+            url=f"/ui?rev={_static_rev('index.html')}",
+            status_code=307,
+            headers=HTML_NO_CACHE_HEADERS,
+        )
+    return _html_file_response("index.html")
 
 
 @app.get("/api/info")
@@ -329,6 +427,7 @@ async def info():
             "POST /api/plan/stream": "4 周路线规划（SSE 流式）",
             "GET /api/daily": "今日 daily_log + 最近 7 天摘要",
             "POST /api/daily": "向 daily_log.md 追加今日条目",
+            "POST /api/daily/attachments": "上传每日留痕附件（PDF / 图片）",
             "GET /api/resume": "简历素材聚合（pitch + 故事预览）",
             "GET /api/today": "今日建议（聚合投递池 + 日志 + 状态机）",
             "POST /api/discover": "JD 半自动抽取（粘贴或 URL → 结构化 JD）",
@@ -533,6 +632,56 @@ async def gen_plan(req: PlanRequest):
         raise HTTPException(status_code=500, detail=f"规划失败: {str(e)}")
 
 
+@app.get("/api/plan/current", response_model=CurrentPlanResponse)
+async def current_plan():
+    """读取当前（最新）学习计划，供页面打开时直接展示。无计划时 has_plan=False。"""
+    try:
+        from plan_gen import load_latest_plan
+        latest = load_latest_plan()
+        if not latest:
+            return CurrentPlanResponse(has_plan=False)
+        return CurrentPlanResponse(
+            has_plan=True,
+            content=latest["content"],
+            filename=latest["filename"],
+            mtime=latest["mtime"],
+            edited_by_user=latest["edited_by_user"],
+        )
+    except Exception as e:
+        _log.exception("current_plan failed")
+        raise HTTPException(status_code=500, detail=f"读取计划失败: {str(e)}")
+
+
+@app.post("/api/plan/save", response_model=PlanResponse)
+async def save_edited_plan(req: PlanSaveRequest):
+    """保存用户手动编辑后的计划：落盘 plans/（带 _user 标识）+ 记一条 episodic 记忆事件，
+    让复盘 / 今日建议能感知『用户调整过计划』。"""
+    content = (req.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="计划内容不能为空")
+    try:
+        from plan_gen import save_plan
+        path = save_plan(content, edited_by_user=True)
+        # 让 OfferClaw 知晓：写入分层记忆（情景层），失败不阻塞落盘
+        try:
+            from memory_layers import EpisodicMemory
+            EpisodicMemory().append({
+                "kind": "plan_edited",
+                "source": "web_ui",
+                "note": (req.note or "").strip(),
+                "chars": len(content),
+                "saved_path": os.path.relpath(path, BASE_DIR),
+            })
+        except Exception:
+            _log.warning("plan_edited memory append failed", exc_info=True)
+        return PlanResponse(plan_md=content, saved_path=os.path.relpath(path, BASE_DIR))
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log.exception("save_edited_plan failed")
+        raise HTTPException(status_code=500, detail=f"保存计划失败: {str(e)}")
+
+
 @app.post("/api/daily/log")
 async def append_daily_structured(req: DailyLogStructuredRequest):
     """结构化留痕（Web 表单专用）：主线/已完成/未完成/笔记 → daily_log.md。
@@ -552,6 +701,62 @@ async def append_daily_structured(req: DailyLogStructuredRequest):
     except Exception as e:
         _log.exception("structured daily log failed")
         raise HTTPException(status_code=500, detail=f"留痕失败: {str(e)}")
+
+
+@app.post("/api/daily/attachments")
+async def upload_daily_attachments(req: DailyAttachmentRequest):
+    """保存学习留痕附件，返回可写入 daily_log.md 的本地链接。"""
+    if not req.files:
+        raise HTTPException(status_code=400, detail="files 不能为空")
+    if len(req.files) > 8:
+        raise HTTPException(status_code=400, detail="单次最多上传 8 个附件")
+
+    today = datetime.date.today().isoformat()
+    target_dir = os.path.join(DAILY_ATTACHMENT_DIR, today)
+    os.makedirs(target_dir, exist_ok=True)
+
+    saved = []
+    for item in req.files:
+        filename = _safe_daily_attachment_name(item.name)
+        ext = os.path.splitext(filename)[1].lower()
+        content_type = (item.content_type or "").lower()
+        if ext not in DAILY_ATTACHMENT_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"不支持的附件类型: {ext or item.name}")
+        if content_type and not (content_type == "application/pdf" or content_type.startswith("image/")):
+            raise HTTPException(status_code=400, detail=f"不支持的附件 MIME: {content_type}")
+
+        data = _decode_attachment_data(item.data_base64)
+        if not data:
+            raise HTTPException(status_code=400, detail=f"附件为空: {item.name}")
+        if len(data) > DAILY_ATTACHMENT_MAX_BYTES:
+            raise HTTPException(status_code=400, detail=f"附件过大: {item.name}")
+
+        path = _unique_path(target_dir, filename)
+        with open(path, "wb") as f:
+            f.write(data)
+        public_name = os.path.basename(path)
+        url = f"/daily_attachments/{today}/{public_name}"
+        saved.append({
+            "name": public_name,
+            "url": url,
+            "markdown": f"[{public_name}]({url})",
+            "size": len(data),
+            "content_type": content_type,
+        })
+    return {"status": "ok", "date": today, "count": len(saved), "files": saved}
+
+
+@app.get("/daily_attachments/{date_str}/{filename}")
+async def get_daily_attachment(date_str: str, filename: str):
+    """读取学习留痕附件。"""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_str):
+        raise HTTPException(status_code=404, detail="附件不存在")
+    filename = _safe_daily_attachment_name(filename)
+    path = os.path.abspath(os.path.join(DAILY_ATTACHMENT_DIR, date_str, filename))
+    root = os.path.abspath(DAILY_ATTACHMENT_DIR)
+    if not path.startswith(root + os.sep) or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="附件不存在")
+    return FileResponse(path)
 
 
 @app.get("/api/daily", response_model=DailyResponse)
@@ -650,6 +855,155 @@ async def discover(req: DiscoverRequest):
     except Exception as e:
         _log.exception("discover failed")
         raise HTTPException(status_code=500, detail=f"抽取失败: {str(e)}")
+
+
+# =====================================================
+# 知识库维护：采集/上传 → 评分预览 → 人工确认 → 增量入库
+# =====================================================
+
+def _kb_count() -> int:
+    """当前 collection 的块数（count 读 SQLite 元数据，跨进程即时准确）。"""
+    import chromadb
+    from rag_tools import get_collection_name
+    client = chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db"))
+    try:
+        return client.get_collection(get_collection_name()).count()
+    except Exception:
+        return 0
+
+
+def _kb_clear_cache():
+    """清 ChromaDB 进程内缓存：让长驻 API 的后续向量查询能立刻看到新入库内容
+    （count 本就即时，但 HNSW 段缓存对跨进程新写入会滞后）。"""
+    try:
+        from chromadb.api.shared_system_client import SharedSystemClient
+        SharedSystemClient.clear_system_cache()
+    except Exception:
+        _log.warning("clear_system_cache failed", exc_info=True)
+
+
+@app.get("/api/kb/status")
+async def kb_status():
+    """知识库概览：collection 名、块数、按 source_type 的来源分布。"""
+    import chromadb
+    from rag_tools import get_collection_name
+    try:
+        name = get_collection_name()
+        client = chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db"))
+        try:
+            col = client.get_collection(name)
+        except Exception:
+            return {"status": "ok", "collection": name, "chunks": 0, "sources": {}}
+        sources = {}
+        try:
+            got = col.get(include=["metadatas"])
+            for m in (got.get("metadatas") or []):
+                st = (m or {}).get("source_type", "unknown")
+                sources[st] = sources.get(st, 0) + 1
+        except Exception:
+            pass
+        return {"status": "ok", "collection": name, "chunks": col.count(), "sources": sources}
+    except Exception as e:
+        _log.exception("kb_status failed")
+        raise HTTPException(status_code=500, detail=f"读取知识库状态失败: {str(e)}")
+
+
+@app.get("/api/kb/pending")
+async def kb_pending():
+    """待人工确认的候选清单（已落 _pending、尚未入库）。"""
+    try:
+        from knowledge_crawler import cmd_list_pending, BASE_DIR as KC_BASE
+        out = cmd_list_pending()
+        for it in out.get("items", []):
+            if it.get("saved_abs"):
+                it["saved"] = os.path.relpath(it["saved_abs"], KC_BASE)
+        return out
+    except Exception as e:
+        _log.exception("kb_pending failed")
+        raise HTTPException(status_code=500, detail=f"读取待审列表失败: {str(e)}")
+
+
+@app.post("/api/kb/add_url")
+async def kb_add_url(req: KBAddUrlRequest):
+    """① 抓取 URL → 打分 → 落 _pending（待确认），不直接入库。
+    命中登录/安全验证墙时返回 400 + 明确提示（同 /api/discover）。"""
+    import asyncio
+    url = (req.url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="url 不能为空")
+    try:
+        from knowledge_crawler import cmd_crawl
+        loop = asyncio.get_event_loop()
+        out = await loop.run_in_executor(None, lambda: cmd_crawl(url))
+        return out  # status: ok / rejected / error，前端据此展示
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        _log.exception("kb_add_url failed")
+        raise HTTPException(status_code=500, detail=f"抓取失败: {str(e)}")
+
+
+@app.post("/api/kb/add_file")
+async def kb_add_file(req: KBAddFileRequest):
+    """① 接收本地 .md/.txt（base64 或纯文本）→ 打分 → 落 _pending（待确认）。
+    用户主动上传，故即便相关性偏低也保留（降级 C 供确认）。"""
+    import asyncio
+    name = (req.name or "upload.md").strip()
+    ext = os.path.splitext(name)[1].lower()
+    if ext not in (".md", ".txt", ".markdown"):
+        raise HTTPException(status_code=400, detail=f"仅支持 .md/.txt/.markdown，收到 {ext or name}")
+    text = req.text or ""
+    if not text and req.content_base64:
+        try:
+            text = base64.b64decode(req.content_base64).decode("utf-8", errors="replace")
+        except Exception:
+            raise HTTPException(status_code=400, detail="文件内容解码失败（需 UTF-8 文本）")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="文件内容为空")
+    try:
+        from knowledge_crawler import _score_and_save
+        loop = asyncio.get_event_loop()
+        out = await loop.run_in_executor(
+            None,
+            lambda: _score_and_save(text, url=f"(本地上传:{name})", origin="本地上传", force_keep=True),
+        )
+        return out
+    except Exception as e:
+        _log.exception("kb_add_file failed")
+        raise HTTPException(status_code=500, detail=f"处理上传失败: {str(e)}")
+
+
+@app.post("/api/kb/promote")
+async def kb_promote(req: KBPromoteRequest):
+    """② 人工确认后：把 _pending 文件提升到正式子目录并**增量入库**（不重建）。
+    返回入库前后块数；清进程缓存让 Web 查询即时可见。"""
+    import asyncio
+    pending = (req.pending_file or "").strip()
+    subdir = (req.to_subdir or "").strip()
+    if not pending or not subdir:
+        raise HTTPException(status_code=400, detail="pending_file 与 to_subdir 必填")
+    try:
+        from knowledge_crawler import cmd_promote, VALID_SUBDIRS
+        if subdir not in VALID_SUBDIRS:
+            raise HTTPException(status_code=400, detail=f"to_subdir 必须是 {sorted(VALID_SUBDIRS)} 之一")
+        before = _kb_count()
+        loop = asyncio.get_event_loop()
+        out = await loop.run_in_executor(
+            None, lambda: cmd_promote(pending, subdir, ingest=True)
+        )
+        if out.get("status") != "ok":
+            raise HTTPException(status_code=400, detail=out.get("error", "提升失败"))
+        _kb_clear_cache()  # 让本进程后续向量查询能看到新入库内容
+        after = _kb_count()
+        out["chunks_before"] = before
+        out["chunks_after"] = after
+        out["chunks_added"] = max(0, after - before)
+        return out
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log.exception("kb_promote failed")
+        raise HTTPException(status_code=500, detail=f"入库失败: {str(e)}")
 
 
 @app.post("/api/resume/build", response_model=ResumeBuildResponse)
@@ -820,9 +1174,15 @@ async def reset_conversation():
 # =====================================================
 
 @app.get("/ui/console")
-async def ui_console():
+async def ui_console(request: Request):
     """求职流程 Stepper 控制台（Phase 3）。"""
-    return FileResponse(os.path.join(BASE_DIR, "static", "console.html"))
+    if not request.url.query:
+        return RedirectResponse(
+            url=f"/ui/console?rev={_static_rev('console.html')}",
+            status_code=307,
+            headers=HTML_NO_CACHE_HEADERS,
+        )
+    return _html_file_response("console.html")
 
 
 @app.get("/api/jd/queries", response_model=JDQueriesResponse)

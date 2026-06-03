@@ -35,6 +35,31 @@ def test_ui_returns_html():
     assert r.status_code == 200
     assert "OfferClaw" in r.text
     assert "<html" in r.text.lower()
+    assert "no-store" in r.headers.get("cache-control", "")
+
+
+def test_ui_sidebar_careerflow_status_rail():
+    r = client.get("/ui?rev=test")
+    assert r.status_code == 200
+    assert 'aria-label="CareerFlow 状态"' in r.text
+    assert 'href="/ui/console?rev=latest"' in r.text
+    assert 'data-flow-step="profile"' in r.text
+    assert 'data-flow-step="application_suggest"' in r.text
+    assert 'class="mobile-nav"' not in r.text
+
+
+def test_ui_bare_path_redirects_to_versioned_html():
+    r = client.get("/ui", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"].startswith("/ui?rev=")
+    assert "no-store" in r.headers.get("cache-control", "")
+
+
+def test_ui_console_bare_path_redirects_to_versioned_html():
+    r = client.get("/ui/console", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"].startswith("/ui/console?rev=")
+    assert "no-store" in r.headers.get("cache-control", "")
 
 
 def test_api_info():
@@ -70,6 +95,38 @@ def test_profile_no_hardcoded_name():
 def test_reset_returns_ok():
     r = client.post("/api/reset")
     assert r.status_code == 200
+
+
+def test_daily_attachment_pdf_upload_and_fetch(tmp_path, monkeypatch):
+    monkeypatch.setattr(rag_api, "DAILY_ATTACHMENT_DIR", str(tmp_path))
+    r = client.post("/api/daily/attachments", json={
+        "files": [{
+            "name": "学习截图.pdf",
+            "content_type": "application/pdf",
+            "data_base64": "JVBERi0xLjQK",
+        }]
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] == 1
+    assert body["files"][0]["url"].startswith("/daily_attachments/")
+    assert body["files"][0]["markdown"].endswith(")")
+
+    fetched = client.get(body["files"][0]["url"])
+    assert fetched.status_code == 200
+    assert fetched.content.startswith(b"%PDF")
+
+
+def test_daily_attachment_rejects_non_image_or_pdf(tmp_path, monkeypatch):
+    monkeypatch.setattr(rag_api, "DAILY_ATTACHMENT_DIR", str(tmp_path))
+    r = client.post("/api/daily/attachments", json={
+        "files": [{
+            "name": "notes.txt",
+            "content_type": "text/plain",
+            "data_base64": "aGVsbG8=",
+        }]
+    })
+    assert r.status_code == 400
 
 
 def test_match_with_clearly_unsuitable_jd():

@@ -22,6 +22,11 @@
     --accent: #D97757;
     --accent-hover: #C56342;
     --accent-soft: #FBEFE9;
+    --info: #2563EB;
+    --info-soft: #EFF6FF;
+    --teal: #0D9488;
+    --teal-soft: #F0FDFA;
+    --ink-soft: #F1F5F9;
     --success: #10B981;
     --success-soft: #ECFDF5;
     --warning: #F59E0B;
@@ -54,6 +59,11 @@
       --accent: #E09975;
       --accent-hover: #ECAB87;
       --accent-soft: #3D2920;
+      --info: #93C5FD;
+      --info-soft: #172554;
+      --teal: #5EEAD4;
+      --teal-soft: #134E4A;
+      --ink-soft: #1E293B;
       --success-soft: #064E3B;
       --warning-soft: #451A03;
       --error-soft: #450A0A;
@@ -72,6 +82,11 @@
     --accent: #E09975;
     --accent-hover: #ECAB87;
     --accent-soft: #3D2920;
+    --info: #93C5FD;
+    --info-soft: #172554;
+    --teal: #5EEAD4;
+    --teal-soft: #134E4A;
+    --ink-soft: #1E293B;
     --success-soft: #064E3B;
     --warning-soft: #451A03;
     --error-soft: #450A0A;
@@ -111,14 +126,14 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
-    padding: 20px 14px;
+    padding: 22px 14px 16px;
   }
   .brand {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 8px 18px;
-    margin-bottom: 8px;
+    padding: 4px 8px 18px;
+    margin-bottom: 14px;
     border-bottom: 1px solid var(--border);
   }
   .brand-mark {
@@ -138,13 +153,13 @@
   .brand-name { font-weight: 600; font-size: 15px; }
   .brand-version { font-size: 11px; color: var(--text-muted); }
 
-  .nav { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; flex: 1; }
+  .nav { display: flex; flex-direction: column; gap: 4px; padding: 0; flex: 1; }
   .nav-group-label {
     font-size: 11px;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    padding: 12px 10px 6px;
+    padding: 14px 10px 6px;
     font-weight: 600;
   }
   .nav-item {
@@ -172,6 +187,57 @@
     font-weight: 500;
   }
   .nav-item.active .badge { background: var(--accent); color: #fff; }
+
+  .flow-mini {
+    position: relative;
+    margin: 6px 8px 12px 38px;
+    padding: 2px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .flow-mini::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 10px;
+    bottom: 10px;
+    width: 1px;
+    background: var(--border);
+  }
+  .flow-mini-step {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.2;
+    min-height: 16px;
+  }
+  .flow-mini-dot {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    flex-shrink: 0;
+    z-index: 1;
+  }
+  .flow-mini-step.done { color: var(--text-secondary); }
+  .flow-mini-step.done .flow-mini-dot {
+    background: var(--success);
+    border-color: var(--success);
+    box-shadow: 0 0 0 3px var(--success-soft);
+  }
+  .flow-mini-step.run .flow-mini-dot {
+    border-color: var(--warning);
+    background: var(--warning-soft);
+  }
+  .flow-mini-step.err .flow-mini-dot {
+    border-color: var(--error);
+    background: var(--error-soft);
+  }
 
   .sidebar-footer {
     padding: 12px 8px 4px;
@@ -212,9 +278,17 @@
     z-index: 10;
     backdrop-filter: saturate(180%) blur(8px);
   }
+  .topbar-title {
+    min-width: 160px;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+  }
+  .topbar-title strong { font-size: 14px; font-weight: 650; color: var(--text); }
+  .topbar-title span { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
   .search {
     flex: 1;
-    max-width: 720px;
+    max-width: 760px;
     position: relative;
     display: flex;
     align-items: center;
@@ -258,23 +332,23 @@
 
   .content {
     flex: 1;
-    padding: 32px;
-    max-width: 1200px;
+    padding: 24px 32px 32px;
+    max-width: 1320px;
     width: 100%;
     margin: 0 auto;
   }
 
   /* ===== Today banner ===== */
   .today {
-    background: linear-gradient(135deg, var(--accent-soft), var(--surface));
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: 18px 22px;
-    margin-bottom: 28px;
-    display: flex;
-    align-items: center;
+    padding: 18px;
+    margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
     gap: 16px;
-    flex-wrap: wrap;
     box-shadow: var(--shadow-sm);
   }
   .today-icon {
@@ -293,6 +367,57 @@
   .today-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
   .today-headline { font-size: 16px; font-weight: 600; color: var(--text); margin-top: 2px; }
   .today-meta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+  .today-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .today-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: var(--ink-soft);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .today-action::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--teal);
+    flex-shrink: 0;
+  }
+  .today-action span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ===== Ops strip ===== */
+  .ops-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    min-height: 74px;
+  }
+  .metric-label { font-size: 10.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+  .metric-value { display: block; font-size: 20px; font-weight: 700; color: var(--text); margin-top: 4px; line-height: 1.1; }
+  .metric-hint { display: block; font-size: 12px; color: var(--text-secondary); margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ===== Section header ===== */
   .section-header {
@@ -307,8 +432,9 @@
   /* ===== Cards grid ===== */
   .grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.1fr) minmax(0, 0.95fr);
     gap: 16px;
+    align-items: start;
   }
   @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
@@ -320,7 +446,7 @@
     padding: 20px;
     display: flex;
     flex-direction: column;
-    min-height: 260px;
+    min-height: 236px;
     transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   }
   .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
@@ -340,6 +466,23 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+  }
+  .card.profile-card .card-icon { color: var(--teal); background: var(--teal-soft); }
+  .card.jd-card .card-icon { color: var(--accent); background: var(--accent-soft); }
+  .card.gap-card .card-icon { color: var(--warning); background: var(--warning-soft); }
+  .card.plan-card .card-icon { color: var(--info); background: var(--info-soft); }
+  .card.daily-card .card-icon { color: var(--teal); background: var(--teal-soft); }
+  .card.resume-card .card-icon { color: var(--success); background: var(--success-soft); }
+  .card.daily-card { grid-column: span 2; }
+  /* 学习计划卡片：跨 2 列、左侧强调条，突出"OfferClaw 据 RAG+画像生成的计划" */
+  .card.plan-card { grid-column: span 2; border-left: 3px solid var(--info); }
+  .card.kb-card .card-icon { color: var(--accent); background: var(--accent-soft); }
+  .card.kb-card { grid-column: span 3; }
+  @media (max-width: 1100px) {
+    .card.plan-card, .card.kb-card { grid-column: span 2; }
+  }
+  @media (max-width: 720px) {
+    .card.daily-card, .card.plan-card, .card.kb-card { grid-column: auto; }
   }
   .card-icon svg { width: 18px; height: 18px; }
   .card-title-block { flex: 1; min-width: 0; }
@@ -378,7 +521,7 @@
     font-size: 13px;
     color: var(--text-secondary);
     overflow: auto;
-    max-height: 320px;
+    max-height: 260px;
     line-height: 1.65;
   }
   .card-body pre {
@@ -413,8 +556,39 @@
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
-  .textarea { resize: vertical; min-height: 72px; line-height: 1.55; font-family: var(--font-sans); }
+  .textarea { resize: vertical; min-height: 68px; line-height: 1.55; font-family: var(--font-sans); }
   .input.compact { padding: 6px 10px; font-size: 12.5px; flex: 1; min-width: 0; }
+  .file-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .file-input { display: none; }
+  .file-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .file-label:hover { background: var(--surface-hover); }
+  .file-label svg { width: 13px; height: 13px; }
+  .file-summary {
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .btn {
     background: var(--accent);
@@ -462,6 +636,50 @@
   .skeleton.short { width: 40%; }
   .skeleton.mid { width: 70%; }
   @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ===== Markdown 渲染（学习计划展示）===== */
+  .md-body { font-size: 13px; line-height: 1.7; color: var(--text); word-break: break-word; }
+  .md-body h1, .md-body h2, .md-body h3 { color: var(--text); font-weight: 650; margin: 14px 0 6px; line-height: 1.35; }
+  .md-body h1 { font-size: 16px; }
+  .md-body h2 { font-size: 14.5px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .md-body h3 { font-size: 13.5px; color: var(--info); }
+  .md-body ul { margin: 6px 0; padding-left: 18px; }
+  .md-body li { margin: 3px 0; }
+  .md-body p { margin: 6px 0; }
+  .md-body strong { color: var(--text); font-weight: 650; }
+  .md-body code { background: var(--ink-soft); padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono, monospace); font-size: 12px; }
+  .md-body a { color: var(--accent); }
+  .plan-meta { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .plan-edit-area { width: 100%; min-height: 320px; font-family: var(--font-mono, monospace); font-size: 12.5px; line-height: 1.6; }
+
+  /* ===== KB 维护：阶段步进器 + 预览 ===== */
+  .kb-steps { display: flex; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
+  .kb-step {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11.5px; color: var(--text-muted);
+    padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .kb-step .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); flex-shrink: 0; }
+  .kb-step.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .kb-step.active .dot { background: var(--accent); }
+  .kb-step.done { color: var(--success); border-color: transparent; background: var(--success-soft); }
+  .kb-step.done .dot { background: var(--success); }
+  .kb-step.err { color: var(--error); border-color: transparent; background: var(--error-soft); }
+  .kb-step.err .dot { background: var(--error); }
+  .kb-preview {
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 12px;
+    margin-top: 10px; background: var(--surface-hover); font-size: 12.5px;
+  }
+  .kb-preview .pv-title { font-weight: 650; color: var(--text); margin-bottom: 4px; }
+  .kb-preview .pv-snippet { color: var(--text-muted); max-height: 132px; overflow: auto; white-space: pre-wrap; margin-top: 8px; font-size: 12px; line-height: 1.55; }
+  .kb-status-bar { font-size: 12px; color: var(--text-muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .kb-status-bar .num { color: var(--accent); font-weight: 650; }
+  .grade-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 650; }
+  .grade-A { background: var(--success-soft); color: var(--success); }
+  .grade-B { background: var(--info-soft); color: var(--info); }
+  .grade-C { background: var(--warning-soft); color: var(--warning); }
+  .grade-REJECT { background: var(--error-soft); color: var(--error); }
 
   /* ===== Streaming cursor ===== */
   .cursor::after {
@@ -515,12 +733,42 @@
   .ask-answer-close:hover { color: var(--text); }
 
   /* ===== Responsive ===== */
+  @media (max-width: 1180px) {
+    .topbar-title { display: none; }
+    .search { max-width: none; }
+  }
   @media (max-width: 860px) {
-    .app { grid-template-columns: 1fr; }
-    .sidebar { display: none; }
-    .topbar { padding: 0 16px; }
-    .content { padding: 20px 16px; }
+    :root { --sidebar-w: 168px; }
+    .app { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+    .sidebar {
+      display: flex;
+      padding: 14px 8px 12px;
+    }
+    .brand { padding: 4px 6px 12px; margin-bottom: 10px; gap: 8px; }
+    .brand-mark { width: 28px; height: 28px; font-size: 14px; }
+    .brand-name { font-size: 13px; }
+    .brand-version { display: none; }
+    .nav { gap: 3px; }
+    .nav-group-label { padding: 10px 8px 5px; font-size: 10px; letter-spacing: 0.03em; }
+    .nav-item { padding: 7px 8px; gap: 7px; font-size: 12.5px; }
+    .nav-item svg { width: 16px; height: 16px; }
+    .nav-item .badge { display: none; }
+    .flow-mini { margin-left: 30px; margin-right: 4px; gap: 6px; }
+    .flow-mini-step { font-size: 11.5px; }
+    .sidebar-footer { padding: 10px 6px 4px; font-size: 11px; }
+    .theme-toggle { padding: 4px 6px; }
+    .topbar { padding: 10px 16px; height: auto; align-items: stretch; flex-wrap: wrap; }
+    .topbar-title { min-width: 100%; }
+    .search { max-width: none; min-width: 0; }
+    .content { padding: 18px 14px 24px; }
+    .today { grid-template-columns: 1fr; }
+    .ops-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .ask-answer { left: 16px; right: 16px; width: auto; max-width: none; transform: none; }
+  }
+  @media (max-width: 520px) {
+    .ops-strip { grid-template-columns: 1fr; }
+    .topbar-actions { width: 100%; }
+    .topbar-actions .btn { width: 100%; justify-content: center; }
   }
 
   /* ===== Toast ===== */
@@ -563,25 +811,22 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         工作台
       </a>
-      <a class="nav-item" href="/ui/console">
+      <a class="nav-item" href="/ui/console?rev=latest">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         CareerFlow 流程
         <span class="badge">8 步</span>
       </a>
-
-      <div class="nav-group-label">外部</div>
-      <a class="nav-item" href="/docs" target="_blank">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        Swagger /docs
-      </a>
-      <a class="nav-item" href="/health" target="_blank">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-        /health
-      </a>
-      <a class="nav-item" href="/api/info" target="_blank">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        /api/info
-      </a>
+      <div class="flow-mini" aria-label="CareerFlow 状态">
+        <div class="flow-mini-step" data-flow-step="profile"><span class="flow-mini-dot"></span><span>画像</span></div>
+        <div class="flow-mini-step" data-flow-step="job_input"><span class="flow-mini-dot"></span><span>JD</span></div>
+        <div class="flow-mini-step" data-flow-step="match"><span class="flow-mini-dot"></span><span>匹配</span></div>
+        <div class="flow-mini-step" data-flow-step="gap"><span class="flow-mini-dot"></span><span>缺口</span></div>
+        <div class="flow-mini-step" data-flow-step="plan"><span class="flow-mini-dot"></span><span>计划</span></div>
+        <div class="flow-mini-step" data-flow-step="today"><span class="flow-mini-dot"></span><span>今日</span></div>
+        <div class="flow-mini-step" data-flow-step="resume"><span class="flow-mini-dot"></span><span>简历</span></div>
+        <div class="flow-mini-step" data-flow-step="application_suggest"><span class="flow-mini-dot"></span><span>投递</span></div>
+      </div>
+      <div class="nav-group-label">仓库链接</div>
       <a class="nav-item" href="https://github.com/zhangyi-nb1/offerclaw" target="_blank">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
         GitHub
@@ -599,6 +844,10 @@
   <!-- ============ Main ============ -->
   <main class="main">
     <div class="topbar">
+      <div class="topbar-title">
+        <strong>作战工作台</strong>
+        <span>Profile · Match · Plan · Execute</span>
+      </div>
       <div class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input id="askInput" placeholder="问 OfferClaw 任何关于项目 / 简历 / 投递的问题（RAG）" autocomplete="off"/>
@@ -617,7 +866,6 @@
     </div>
 
     <div class="content">
-
       <!-- 今日建议横幅 -->
       <div class="today">
         <div class="today-icon">
@@ -627,6 +875,7 @@
           <div class="today-label">今日建议</div>
           <div class="today-headline" id="todayHeadline">加载中…</div>
           <div class="today-meta" id="todayMeta"></div>
+          <div class="today-actions" id="todayActions"></div>
         </div>
         <button class="btn secondary" onclick="loadToday()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -634,16 +883,39 @@
         </button>
       </div>
 
+      <div class="ops-strip">
+        <div class="metric">
+          <span class="metric-label">Knowledge Base</span>
+          <strong class="metric-value" id="metricChunks">—</strong>
+          <span class="metric-hint" id="metricCollection">等待连接</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Today</span>
+          <strong class="metric-value" id="metricToday">—</strong>
+          <span class="metric-hint" id="metricTodayHint">待加载建议</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Applications</span>
+          <strong class="metric-value" id="metricApps">—</strong>
+          <span class="metric-hint">投递池记录</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Daily Log</span>
+          <strong class="metric-value" id="metricLog">—</strong>
+          <span class="metric-hint">最近记录日期</span>
+        </div>
+      </div>
+
       <!-- 卡片网格 -->
       <div class="section-header">
         <span class="section-title">求职作战面板</span>
-        <span class="section-action">6 个模块</span>
+        <span class="section-action">7 个模块</span>
       </div>
 
       <div class="grid">
 
         <!-- 1 画像 -->
-        <div class="card">
+        <div class="card profile-card">
           <div class="card-head">
             <div class="card-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -668,7 +940,7 @@
         </div>
 
         <!-- 2 JD 匹配 -->
-        <div class="card">
+        <div class="card jd-card">
           <div class="card-head">
             <div class="card-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -693,7 +965,7 @@
         </div>
 
         <!-- 3 缺口 -->
-        <div class="card">
+        <div class="card gap-card">
           <div class="card-head">
             <div class="card-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -710,28 +982,34 @@
         </div>
 
         <!-- 4 计划 -->
-        <div class="card">
+        <div class="card plan-card">
           <div class="card-head">
             <div class="card-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </div>
             <div class="card-title-block">
-              <div class="card-title">学习/求职计划</div>
-              <div class="card-subtitle">SSE 流式 · /api/plan/stream</div>
+              <div class="card-title">学习计划（OfferClaw 据 RAG + 画像生成）</div>
+              <div class="card-subtitle">可查看 · 可编辑 · 编辑后 OfferClaw 会知晓</div>
             </div>
-            <span class="status-dot" id="planStatus">未生成</span>
+            <span class="status-dot" id="planStatus">加载中</span>
           </div>
-          <div class="card-actions" style="margin-top:0; margin-bottom:14px">
-            <button class="btn" onclick="doPlan(false)">基于 ③ 缺口</button>
+          <div class="card-actions" id="planActionsView" style="margin-top:0; margin-bottom:12px">
+            <button class="btn" onclick="doPlan(false)">基于 ③ 缺口生成</button>
             <button class="btn secondary" onclick="doPlan(true)">通用方向</button>
+            <button class="btn secondary" id="planEditBtn" onclick="enterPlanEdit()" style="display:none">编辑计划</button>
+          </div>
+          <div class="card-actions" id="planActionsEdit" style="margin-top:0; margin-bottom:12px; display:none">
+            <button class="btn" onclick="savePlanEdit()">保存计划</button>
+            <button class="btn secondary" onclick="cancelPlanEdit()">取消</button>
+            <span class="card-subtitle" style="align-self:center">保存后写入 plans/ 并记入 OfferClaw 记忆</span>
           </div>
           <div class="card-body" id="planBody">
-            <p style="color:var(--text-muted)">点击上方按钮，约 15-30 秒（流式输出）。</p>
+            <p style="color:var(--text-muted)">加载当前计划…</p>
           </div>
         </div>
 
         <!-- 5 每日 -->
-        <div class="card">
+        <div class="card daily-card">
           <div class="card-head">
             <div class="card-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
@@ -751,8 +1029,16 @@
             <option value="投递准备">投递准备</option>
           </select>
           <textarea class="textarea" id="dailyDone" placeholder="已完成（每行一项）：例\n看完 RAG 全链路\n写了分块去重代码"></textarea>
-          <textarea class="textarea" id="dailyTodo" placeholder="未完成（每行一项，可空）" style="margin-top:8px;min-height:48px"></textarea>
-          <textarea class="textarea" id="dailyNotes" placeholder="学习留痕 / 笔记 / 链接（可空）" style="margin-top:8px;min-height:48px"></textarea>
+          <textarea class="textarea" id="dailyTodo" placeholder="系统识别的未完成/偏离；这里仅补充遗漏项（可空）" style="margin-top:8px;min-height:48px"></textarea>
+          <textarea class="textarea" id="dailyNotes" placeholder="学习留痕：笔记、链接、PDF/图片说明（可空）" style="margin-top:8px;min-height:48px"></textarea>
+          <div class="file-row">
+            <label class="file-label" for="dailyFiles">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.64 17.2a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              添加 PDF / 图片
+            </label>
+            <input class="file-input" id="dailyFiles" type="file" accept="application/pdf,image/*" multiple>
+            <span class="file-summary" id="dailyFileSummary">未选择附件</span>
+          </div>
           <div class="card-actions">
             <button class="btn" onclick="appendStructuredDaily()">结构化留痕</button>
             <button class="btn secondary" onclick="loadDaily()">刷新近 7 天</button>
@@ -761,7 +1047,7 @@
         </div>
 
         <!-- 6 简历 -->
-        <div class="card">
+        <div class="card resume-card">
           <div class="card-head">
             <div class="card-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -779,6 +1065,50 @@
           <div class="card-body" id="resumeBody">
             <p style="color:var(--text-muted)">点击上方按钮加载，或针对 ② JD 流式生成项目段。</p>
           </div>
+        </div>
+
+        <!-- 7 知识库维护 -->
+        <div class="card kb-card">
+          <div class="card-head">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </div>
+            <div class="card-title-block">
+              <div class="card-title">知识库维护（学到好资源就加进来）</div>
+              <div class="card-subtitle">URL / 本地 md·txt → 评分预览 → 你确认 → 增量入库</div>
+            </div>
+            <span class="status-dot" id="kbStatus">就绪</span>
+          </div>
+
+          <div class="kb-status-bar" id="kbStatusBar">
+            <span>知识库：<span class="num" id="kbChunks">—</span> 块</span>
+            <span id="kbSources" style="color:var(--text-muted)"></span>
+            <button class="btn secondary" style="padding:3px 10px" onclick="loadKbStatus()">刷新</button>
+            <button class="btn secondary" style="padding:3px 10px" onclick="toggleKbPending()">待审候选 <span id="kbPendingCount">—</span></button>
+          </div>
+
+          <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; align-items:center">
+            <input class="input compact" id="kbUrl" placeholder="粘贴学习资源 URL（网页 / GitHub 仓库）…" style="flex:1; min-width:220px">
+            <button class="btn" onclick="kbAddUrl()">抓取入候选</button>
+            <label class="file-label" for="kbFile">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.64 17.2a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              上传 md/txt
+            </label>
+            <input class="file-input" id="kbFile" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain">
+          </div>
+
+          <div class="kb-steps" id="kbSteps" style="display:none">
+            <span class="kb-step" data-step="collect"><span class="dot"></span>① 采集</span>
+            <span class="kb-step" data-step="score"><span class="dot"></span>② 评分预览</span>
+            <span class="kb-step" data-step="confirm"><span class="dot"></span>③ 你确认归类</span>
+            <span class="kb-step" data-step="ingest"><span class="dot"></span>④ 增量入库</span>
+            <span class="kb-step" data-step="done"><span class="dot"></span>✓ 完成</span>
+          </div>
+
+          <div class="card-body" id="kbBody" style="margin-top:6px">
+            <p style="color:var(--text-muted)">贴一个链接或传一份 md/txt：先评分预览，确认后再增量写入向量库（不重建、不影响已有内容）。</p>
+          </div>
+          <div class="card-body" id="kbPendingBody" style="margin-top:6px; display:none"></div>
         </div>
 
       </div>
@@ -827,6 +1157,22 @@ function setStatus(id, kind, text){
   el.textContent = text;
 }
 
+function setFlowStep(key, state){
+  const el = document.querySelector(`[data-flow-step="${key}"]`);
+  if (!el) return;
+  el.classList.remove('done', 'run', 'err');
+  if (state) el.classList.add(state);
+}
+
+function markFlowDone(key){ setFlowStep(key, 'done'); }
+function markFlowRun(key){ setFlowStep(key, 'run'); }
+function markFlowError(key){ setFlowStep(key, 'err'); }
+
+function updateJDFlowState(){
+  const hasJD = (document.getElementById('jdInput')?.value || '').trim().length > 0;
+  setFlowStep('job_input', hasJD ? 'done' : '');
+}
+
 function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
@@ -848,13 +1194,18 @@ async function loadProfile(){
       <p style="color:var(--text-secondary)">${escapeHtml(d.skills_summary||'—')}</p>
       <p style="margin-top:10px;font-size:11.5px;color:var(--text-muted)">更新于 ${escapeHtml(d.updated_at||'—')}</p>`;
     setStatus('profStatus', 'ok', '已加载');
+    markFlowDone('profile');
   } catch (e) {
     body.innerHTML = `<p style="color:var(--error)">加载失败：${escapeHtml(e.message)}</p>`;
     setStatus('profStatus', 'err', '失败');
+    markFlowError('profile');
   }
 }
 
-function loadSampleJD(){ document.getElementById('jdInput').value = SAMPLE_JD; }
+function loadSampleJD(){
+  document.getElementById('jdInput').value = SAMPLE_JD;
+  updateJDFlowState();
+}
 
 // ===== JD discovery =====
 async function doDiscover(){
@@ -863,6 +1214,7 @@ async function doDiscover(){
   if (!url && !raw) { showToast('请填 URL 或先粘贴 JD 原文'); return; }
   const body = document.getElementById('matchBody');
   setStatus('matchStatus', 'run', url ? '渲染中(10-30s)' : '抽取中');
+  markFlowRun('job_input');
   body.innerHTML = '<p style="color:var(--text-muted)">' + (url ? '⏳ 启动 Headless Chromium 渲染页面…' : '抽取中…') + '</p>';
   try {
     const r = await fetch('/api/discover', {
@@ -876,6 +1228,7 @@ async function doDiscover(){
     }
     const d = await r.json();
     document.getElementById('jdInput').value = d.jd_text || raw;
+    updateJDFlowState();
     body.innerHTML = `
       <p><strong>${escapeHtml(d.company||'?')}</strong> · ${escapeHtml(d.title||'?')}</p>
       <p style="color:var(--text-muted);font-size:12px">${escapeHtml(d.location||'?')} · ${escapeHtml(d.job_type||'?')} · 原文 ${d.raw_chars} 字</p>
@@ -883,9 +1236,11 @@ async function doDiscover(){
       <div class="chip-row">${(d.skills_detected||[]).map(s => `<span class="chip">${escapeHtml(s)}</span>`).join('') || '<span class="chip">未命中</span>'}</div>
       <p style="margin-top:10px;color:var(--success);font-size:12px">✓ 现在可点 "开始匹配"</p>`;
     setStatus('matchStatus', 'ok', '已抽取');
+    markFlowDone('job_input');
   } catch (e) {
     body.innerHTML = `<p style="color:var(--error)">抽取失败：${escapeHtml(e.message)}</p>`;
     setStatus('matchStatus', 'err', '失败');
+    markFlowError('job_input');
   }
 }
 
@@ -897,6 +1252,9 @@ async function doMatch(){
   body.innerHTML = '<div class="skeleton mid"></div><div class="skeleton"></div><div class="skeleton short"></div>';
   setStatus('matchStatus', 'run', '匹配中');
   setStatus('gapStatus', 'run', '等待');
+  markFlowDone('job_input');
+  markFlowRun('match');
+  markFlowRun('gap');
   try {
     const r = await fetch('/api/match', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -909,10 +1267,12 @@ async function doMatch(){
       <p><strong>结论</strong> <span class="chip ${kind}">${escapeHtml(d.status||'-')}</span> <span class="chip">${escapeHtml(d.direction||'-')}</span></p>
       <pre>${escapeHtml(d.summary||'')}</pre>`;
     setStatus('matchStatus', kind, d.status||'完成');
+    markFlowDone('match');
     renderGaps(d.gap_list||{}, d.suggestions||[]);
   } catch (e) {
     body.innerHTML = `<p style="color:var(--error)">匹配失败：${escapeHtml(e.message)}</p>`;
     setStatus('matchStatus', 'err', '失败');
+    markFlowError('match');
   }
 }
 
@@ -935,10 +1295,12 @@ function renderGaps(gapList, suggestions){
   if (total === 0) {
     body.innerHTML = `<p style="color:var(--success)">✓ 本次匹配未识别到硬缺口</p>`;
     setStatus('gapStatus', 'ok', '无缺口');
+    markFlowDone('gap');
     LAST_GAPS_TEXT = '';
   } else {
     body.innerHTML = html;
     setStatus('gapStatus', 'ok', `${total} 条`);
+    markFlowDone('gap');
     LAST_GAPS_TEXT = plain.trim();
   }
 }
@@ -953,6 +1315,7 @@ async function doPlan(useGeneric){
   body.innerHTML = '<pre id="planStream" class="cursor"></pre>';
   const streamEl = document.getElementById('planStream');
   setStatus('planStatus', 'run', '生成中');
+  markFlowRun('plan');
   try {
     const r = await fetch('/api/plan/stream', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -976,8 +1339,9 @@ async function doPlan(useGeneric){
           if (c.text) { streamEl.textContent += c.text; streamEl.scrollTop = streamEl.scrollHeight; }
           else if (c.done) {
             streamEl.classList.remove('cursor');
-            body.insertAdjacentHTML('afterbegin', `<p style="color:var(--text-muted);font-size:11.5px">已写入 ${escapeHtml(c.saved_path||'—')}</p>`);
             setStatus('planStatus', 'ok', '已生成');
+            markFlowDone('plan');
+            loadCurrentPlan();   // 生成完毕 → 重新拉取并以 markdown 渲染当前计划
             return;
           } else if (c.error) { throw new Error(c.error); }
         } catch (e) { if (e.message !== 'Unexpected end of JSON input') throw e; }
@@ -985,8 +1349,105 @@ async function doPlan(useGeneric){
     }
     streamEl.classList.remove('cursor');
     setStatus('planStatus', 'ok', '完成');
+    markFlowDone('plan');
+    loadCurrentPlan();
   } catch (e) {
     body.innerHTML = `<p style="color:var(--error)">规划失败：${escapeHtml(e.message)}</p>`;
+    setStatus('planStatus', 'err', '失败');
+    markFlowError('plan');
+  }
+}
+
+// ===== 当前计划：加载 / 渲染 / 编辑 / 保存 =====
+let CURRENT_PLAN_RAW = "";
+
+// 轻量 markdown 渲染（仅标题/列表/加粗/行内代码，先转义再套格式，避免 XSS）
+function renderMarkdown(md){
+  const esc = escapeHtml(md || "");
+  const lines = esc.split('\n');
+  let html = '', inList = false;
+  const inline = s => s
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
+  for (let raw of lines){
+    // 去行尾空白；剥掉一层引用标记 >（已被 escapeHtml 转成 &gt;），扁平化展示
+    const line = raw.replace(/\s+$/,'').replace(/^(?:&gt;|>)\s?/, '');
+    let m;
+    if (/^```/.test(line.trim())) { closeList(); continue; }   // 跳过代码围栏行（计划常被 ``` 包裹）
+    if ((m = line.match(/^###\s+(.*)/))) { closeList(); html += `<h3>${inline(m[1])}</h3>`; }
+    else if ((m = line.match(/^##\s+(.*)/))) { closeList(); html += `<h2>${inline(m[1])}</h2>`; }
+    else if ((m = line.match(/^#\s+(.*)/))) { closeList(); html += `<h1>${inline(m[1])}</h1>`; }
+    else if ((m = line.match(/^\s*[-*]\s+(.*)/))) { if (!inList){ html += '<ul>'; inList = true; } html += `<li>${inline(m[1])}</li>`; }
+    else if (line.trim() === '') { closeList(); }
+    else { closeList(); html += `<p>${inline(line)}</p>`; }
+  }
+  closeList();
+  return html;
+}
+
+async function loadCurrentPlan(){
+  const body = document.getElementById('planBody');
+  setStatus('planStatus', 'run', '加载中');
+  try {
+    const r = await fetch('/api/plan/current');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (!d.has_plan) {
+      body.innerHTML = '<p style="color:var(--text-muted)">还没有计划。点上方「基于 ③ 缺口生成」让 OfferClaw 据 RAG + 画像制定一份。</p>';
+      setStatus('planStatus', 'idle', '未生成');
+      document.getElementById('planEditBtn').style.display = 'none';
+      return;
+    }
+    CURRENT_PLAN_RAW = d.content || "";
+    const when = d.mtime ? new Date(d.mtime * 1000).toLocaleString('zh-CN') : '';
+    const badge = d.edited_by_user
+      ? '<span class="chip accent">你已编辑</span>'
+      : '<span class="chip">AI 生成</span>';
+    body.innerHTML =
+      `<div class="plan-meta">${badge}<span>${escapeHtml(d.filename||'')}</span>` +
+      (when ? `<span>· ${escapeHtml(when)}</span>` : '') + `</div>` +
+      `<div class="md-body" id="planMd">${renderMarkdown(CURRENT_PLAN_RAW)}</div>`;
+    document.getElementById('planEditBtn').style.display = '';
+    setStatus('planStatus', 'ok', d.edited_by_user ? '已编辑' : '已生成');
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--error)">读取计划失败：${escapeHtml(e.message)}</p>`;
+    setStatus('planStatus', 'err', '失败');
+  }
+}
+
+function enterPlanEdit(){
+  if (!CURRENT_PLAN_RAW) { showToast('还没有可编辑的计划'); return; }
+  const body = document.getElementById('planBody');
+  body.innerHTML = `<textarea class="textarea plan-edit-area" id="planEditArea"></textarea>`;
+  document.getElementById('planEditArea').value = CURRENT_PLAN_RAW;
+  document.getElementById('planActionsView').style.display = 'none';
+  document.getElementById('planActionsEdit').style.display = '';
+}
+
+function cancelPlanEdit(){
+  document.getElementById('planActionsEdit').style.display = 'none';
+  document.getElementById('planActionsView').style.display = '';
+  loadCurrentPlan();
+}
+
+async function savePlanEdit(){
+  const content = (document.getElementById('planEditArea')?.value || '').trim();
+  if (!content) { showToast('计划内容不能为空'); return; }
+  setStatus('planStatus', 'run', '保存中');
+  try {
+    const r = await fetch('/api/plan/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({content: content, note: '用户在 Web 界面编辑计划'})
+    });
+    if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
+    document.getElementById('planActionsEdit').style.display = 'none';
+    document.getElementById('planActionsView').style.display = '';
+    showToast('✓ 已保存，OfferClaw 已知晓你的调整');
+    loadCurrentPlan();
+  } catch (e) {
+    showToast('保存失败：' + e.message);
     setStatus('planStatus', 'err', '失败');
   }
 }
@@ -996,6 +1457,7 @@ async function loadDaily(){
   const body = document.getElementById('dailyBody');
   body.innerHTML = '<div class="skeleton"></div><div class="skeleton short"></div>';
   setStatus('dailyStatus', 'run', '加载中');
+  markFlowRun('today');
   try {
     const r = await fetch('/api/daily');
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -1008,9 +1470,11 @@ async function loadDaily(){
       : '';
     body.innerHTML = today + recent;
     setStatus('dailyStatus', 'ok', '已加载');
+    markFlowDone('today');
   } catch (e) {
     body.innerHTML = `<p style="color:var(--error)">读取失败：${escapeHtml(e.message)}</p>`;
     setStatus('dailyStatus', 'err', '失败');
+    markFlowError('today');
   }
 }
 
@@ -1018,38 +1482,100 @@ function _lines(id){
   return (document.getElementById(id).value || '')
     .split('\n').map(s => s.trim()).filter(Boolean);
 }
+
+function selectedDailyFiles(){
+  const input = document.getElementById('dailyFiles');
+  return input ? Array.from(input.files || []) : [];
+}
+
+function updateDailyFileSummary(){
+  const el = document.getElementById('dailyFileSummary');
+  const files = selectedDailyFiles();
+  if (!el) return;
+  if (!files.length) {
+    el.textContent = '未选择附件';
+    return;
+  }
+  const names = files.map(f => f.name).slice(0, 2).join('、');
+  el.textContent = files.length > 2 ? `${names} 等 ${files.length} 个附件` : names;
+}
+
+function fileToBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',').pop() || '');
+    reader.onerror = () => reject(reader.error || new Error('读取附件失败'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadDailyAttachments(files){
+  if (!files.length) return [];
+  const payload = [];
+  for (const file of files) {
+    payload.push({
+      name: file.name,
+      content_type: file.type || '',
+      data_base64: await fileToBase64(file)
+    });
+  }
+  const r = await fetch('/api/daily/attachments', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({files: payload})
+  });
+  if (!r.ok) { const t = await r.text(); throw new Error('附件上传失败：HTTP ' + r.status + ' ' + t); }
+  const d = await r.json();
+  return d.files || [];
+}
+
 async function appendStructuredDaily(){
   const tag = document.getElementById('dailyTag').value;
   const done = _lines('dailyDone');
   const todo = _lines('dailyTodo');
   const notes = (document.getElementById('dailyNotes').value || '').trim();
-  if (!tag && !done.length && !todo.length && !notes) {
+  const files = selectedDailyFiles();
+  if (!tag && !done.length && !todo.length && !notes && !files.length) {
     showToast('请至少填一项'); return;
   }
   setStatus('dailyStatus', 'run', '写入中');
+  markFlowRun('today');
   try {
+    const uploaded = await uploadDailyAttachments(files);
+    const attachmentNotes = uploaded.length
+      ? '附件\n' + uploaded.map(f => `- [${f.name}](${f.url})`).join('\n')
+      : '';
+    const finalNotes = [notes, attachmentNotes].filter(Boolean).join('\n\n');
     const r = await fetch('/api/daily/log', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({tag, done, todo, notes})
+      body: JSON.stringify({tag, done, todo, notes: finalNotes})
     });
     if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
     const d = await r.json();
     document.getElementById('dailyDone').value = '';
     document.getElementById('dailyTodo').value = '';
     document.getElementById('dailyNotes').value = '';
-    showToast(`✓ 已留痕（完成 ${d.done_count} / 未完成 ${d.todo_count}）`);
+    document.getElementById('dailyFiles').value = '';
+    updateDailyFileSummary();
+    const attachText = uploaded.length ? ` / 附件 ${uploaded.length}` : '';
+    showToast(`✓ 已留痕（完成 ${d.done_count} / 未完成 ${d.todo_count}${attachText}）`);
+    markFlowDone('today');
     await loadDaily();
   } catch (e) {
     showToast('写入失败：' + e.message);
     setStatus('dailyStatus', 'err', '失败');
+    markFlowError('today');
   }
 }
+
+document.getElementById('dailyFiles')?.addEventListener('change', updateDailyFileSummary);
 
 // ===== Resume =====
 async function loadResume(){
   const body = document.getElementById('resumeBody');
   body.innerHTML = '<div class="skeleton"></div><div class="skeleton mid"></div>';
   setStatus('resumeStatus', 'run', '加载中');
+  markFlowRun('resume');
   try {
     const r = await fetch('/api/resume');
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -1060,9 +1586,11 @@ async function loadResume(){
       <p style="margin-top:12px"><strong>故事库标题</strong></p>
       <pre>${escapeHtml(d.stories_preview||'')}</pre>`;
     setStatus('resumeStatus', 'ok', '已加载');
+    markFlowDone('resume');
   } catch (e) {
     body.innerHTML = `<p style="color:var(--error)">读取失败：${escapeHtml(e.message)}</p>`;
     setStatus('resumeStatus', 'err', '失败');
+    markFlowError('resume');
   }
 }
 
@@ -1073,6 +1601,7 @@ async function buildResumeForJD(){
   body.innerHTML = '<p><strong>JD 定制项目段（SSE 流式）</strong></p><pre id="resumeStream" class="cursor"></pre>';
   const streamEl = document.getElementById('resumeStream');
   setStatus('resumeStatus', 'run', '生成中');
+  markFlowRun('resume');
   try {
     const r = await fetch('/api/resume/build/stream', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -1094,6 +1623,7 @@ async function buildResumeForJD(){
         if (data === '[DONE]') {
           streamEl.classList.remove('cursor');
           setStatus('resumeStatus', 'ok', '已生成');
+          markFlowDone('resume');
           return;
         }
         try { const c = JSON.parse(data); if (c.text) streamEl.textContent += c.text; } catch(e) {}
@@ -1101,9 +1631,11 @@ async function buildResumeForJD(){
     }
     streamEl.classList.remove('cursor');
     setStatus('resumeStatus', 'ok', '完成');
+    markFlowDone('resume');
   } catch (e) {
     body.innerHTML = `<p style="color:var(--error)">生成失败：${escapeHtml(e.message)}</p>`;
     setStatus('resumeStatus', 'err', '失败');
+    markFlowError('resume');
   }
 }
 
@@ -1158,8 +1690,10 @@ document.getElementById('askInput').addEventListener('keydown', e => {
 async function loadToday(){
   const head = document.getElementById('todayHeadline');
   const meta = document.getElementById('todayMeta');
+  const actions = document.getElementById('todayActions');
   head.textContent = '加载中…';
   meta.textContent = '';
+  actions.innerHTML = '';
   try {
     const r = await fetch('/api/today');
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -1168,11 +1702,23 @@ async function loadToday(){
     let metaTxt = `来源 ${d.source||'-'} · 投递池 ${d.stats?.applications_total||0} 条`;
     if (d.stats?.last_log_date) metaTxt += ` · 最近日志 ${d.stats.last_log_date}`;
     meta.textContent = metaTxt;
+    document.getElementById('metricToday').textContent = d.today || '—';
+    document.getElementById('metricTodayHint').textContent = d.source || '今日建议';
+    document.getElementById('metricApps').textContent = d.stats?.applications_total ?? '0';
+    document.getElementById('metricLog').textContent = d.stats?.last_log_date || '—';
+    markFlowDone('today');
+    if (typeof d.stats?.applications_total === 'number') markFlowDone('application_suggest');
+    actions.innerHTML = (d.next_actions || []).slice(0, 2).map(a =>
+      `<span class="today-action" title="${escapeHtml(a)}"><span>${escapeHtml(a)}</span></span>`
+    ).join('');
     if (d.next_actions && d.next_actions.length) {
       head.title = (d.reason||'') + '\n\n下一步:\n• ' + d.next_actions.join('\n• ');
     }
   } catch (e) {
     head.textContent = '加载失败：' + e.message;
+    document.getElementById('metricToday').textContent = '失败';
+    document.getElementById('metricTodayHint').textContent = e.message;
+    markFlowError('today');
   }
 }
 
@@ -1183,16 +1729,226 @@ async function pingHealth(){
     const r = await fetch('/health');
     const d = await r.json();
     el.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success);margin-right:6px"></span>${d.collection_records||0} chunks`;
+    document.getElementById('metricChunks').textContent = d.collection_records || 0;
+    document.getElementById('metricCollection').textContent = d.collection || d.embedding || 'collection ready';
   } catch (e) {
     el.innerHTML = `<span style="color:var(--error)">连接失败</span>`;
+    document.getElementById('metricChunks').textContent = '失败';
+    document.getElementById('metricCollection').textContent = e.message;
   }
 }
 
+// ===== 知识库维护 =====
+let KB_PENDING_FILE = "";   // 当前待确认入库的 _pending 文件（相对路径）
+
+function kbSetStep(key, state){   // state: active / done / err
+  document.querySelectorAll('#kbSteps .kb-step').forEach(el => {
+    if (el.dataset.step === key){ el.classList.remove('active','done','err'); if (state) el.classList.add(state); }
+  });
+}
+function kbResetSteps(){
+  document.getElementById('kbSteps').style.display = 'flex';
+  document.querySelectorAll('#kbSteps .kb-step').forEach(el => el.classList.remove('active','done','err'));
+}
+
+async function loadKbStatus(){
+  try {
+    const r = await fetch('/api/kb/status');
+    const d = await r.json();
+    document.getElementById('kbChunks').textContent = d.chunks ?? '—';
+    const src = d.sources || {};
+    const order = ['resource','career_knowledge','experience'];
+    const parts = order.filter(k => src[k]).map(k => `${({resource:'学习资源',career_knowledge:'职业知识',experience:'经验贴'})[k]} ${src[k]}`);
+    document.getElementById('kbSources').textContent = parts.length ? '· ' + parts.join(' · ') : '';
+  } catch (e) { document.getElementById('kbChunks').textContent = '?'; }
+  // 待审数量
+  try {
+    const r2 = await fetch('/api/kb/pending');
+    const d2 = await r2.json();
+    document.getElementById('kbPendingCount').textContent = '(' + (d2.count ?? 0) + ')';
+  } catch (e) {}
+}
+
+async function kbAddUrl(){
+  const url = (document.getElementById('kbUrl').value || '').trim();
+  if (!url) { showToast('先粘贴一个 URL'); return; }
+  kbResetSteps(); kbSetStep('collect','active');
+  setStatus('kbStatus','run','采集中');
+  document.getElementById('kbBody').innerHTML = '<p style="color:var(--text-muted)">⏳ 抓取中（网页/仓库，约 5-30s）…</p>';
+  try {
+    const r = await fetch('/api/kb/add_url', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({url})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+    kbSetStep('collect','done');
+    handleKbCandidate(d);
+  } catch (e) {
+    kbSetStep('collect','err');
+    setStatus('kbStatus','err','失败');
+    document.getElementById('kbBody').innerHTML = `<p style="color:var(--error)">采集失败：${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function kbAddFile(file){
+  if (!file) return;
+  kbResetSteps(); kbSetStep('collect','active');
+  setStatus('kbStatus','run','读取中');
+  document.getElementById('kbBody').innerHTML = `<p style="color:var(--text-muted)">⏳ 处理 ${escapeHtml(file.name)} …</p>`;
+  try {
+    const b64 = await fileToBase64(file);
+    const r = await fetch('/api/kb/add_file', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name: file.name, content_base64: b64})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+    kbSetStep('collect','done');
+    handleKbCandidate(d);
+  } catch (e) {
+    kbSetStep('collect','err');
+    setStatus('kbStatus','err','失败');
+    document.getElementById('kbBody').innerHTML = `<p style="color:var(--error)">处理失败：${escapeHtml(e.message)}</p>`;
+  } finally {
+    document.getElementById('kbFile').value = '';
+  }
+}
+
+function handleKbCandidate(d){
+  // d.status: ok（已落 _pending 待确认）/ rejected（被质量门拒）/ error
+  if (d.status === 'rejected') {
+    kbSetStep('score','err'); setStatus('kbStatus','err','已拒绝');
+    document.getElementById('kbBody').innerHTML =
+      `<p style="color:var(--warning)">质量门判定为不入库：${escapeHtml(d.reason||'内容无关/过短')}</p>`;
+    return;
+  }
+  if (d.status !== 'ok') {
+    kbSetStep('score','err'); setStatus('kbStatus','err','失败');
+    document.getElementById('kbBody').innerHTML = `<p style="color:var(--error)">${escapeHtml(d.error||'采集失败')}</p>`;
+    return;
+  }
+  kbSetStep('score','done'); kbSetStep('confirm','active');
+  setStatus('kbStatus','ok','待确认');
+  KB_PENDING_FILE = d.saved || '';
+  renderKbPreview(d);
+}
+
+function renderKbPreview(d){
+  const g = (d.grade || 'C');
+  const subdir = d.suggested_subdir || 'learning_resources';
+  const snippet = (d.preview && d.preview.head) ? d.preview.head : '（无预览）';
+  const stats = d.stats || {};
+  const srcLine = d.source_url
+    ? `<div style="margin-top:4px"><a href="${escapeHtml(d.source_url)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">${escapeHtml(d.source_url)}</a></div>` : '';
+  document.getElementById('kbBody').innerHTML = `
+    <div class="kb-preview">
+      <div class="pv-title">${escapeHtml(d.title || '未命名资源')}
+        <span class="grade-badge grade-${escapeHtml(g)}">${escapeHtml(g)} 档</span></div>
+      <div style="font-size:11.5px;color:var(--text-muted)">相关性 ${d.relevance ?? '—'} · 密度 ${d.density ?? '—'}${stats.chars?(' · '+stats.chars+' 字'):''}</div>
+      ${srcLine}
+      <div class="pv-snippet">${escapeHtml(snippet)}</div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--text-muted)">归类到</span>
+        <select class="input compact" id="kbSubdir" style="max-width:160px">
+          <option value="learning_resources">学习资源</option>
+          <option value="career_paths">职业路线</option>
+          <option value="experience_posts">经验贴</option>
+        </select>
+        <button class="btn" onclick="kbPromote()">确认入库</button>
+        <button class="btn secondary" onclick="kbCancelCandidate()">放弃</button>
+      </div>
+    </div>`;
+  document.getElementById('kbSubdir').value = subdir;
+}
+
+function kbCancelCandidate(){
+  KB_PENDING_FILE = "";
+  kbSetStep('confirm','err');
+  setStatus('kbStatus','idle','就绪');
+  document.getElementById('kbBody').innerHTML = '<p style="color:var(--text-muted)">已放弃该候选（文件仍留在 _pending，可稍后处理）。</p>';
+}
+
+async function kbPromote(){
+  if (!KB_PENDING_FILE) { showToast('没有待入库的候选'); return; }
+  const subdir = document.getElementById('kbSubdir').value;
+  kbSetStep('confirm','done'); kbSetStep('ingest','active');
+  setStatus('kbStatus','run','入库中');
+  document.getElementById('kbBody').innerHTML = '<p style="color:var(--text-muted)">⏳ 增量入库中（分块 → 本地 bge 向量化 → 写入，不重建）…</p>';
+  try {
+    const r = await fetch('/api/kb/promote', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({pending_file: KB_PENDING_FILE, to_subdir: subdir})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+    kbSetStep('ingest','done'); kbSetStep('done','done');
+    setStatus('kbStatus','ok','已入库');
+    document.getElementById('kbBody').innerHTML = `
+      <p style="color:var(--success)">✓ 已入库：${escapeHtml(d.promoted_to||'')}</p>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:4px">
+        新增 <strong>${d.chunks_added ?? '?'}</strong> 块 · 知识库现共 <strong>${d.chunks_after ?? '?'}</strong> 块 · 已可被检索（未重建、未影响原有内容）</p>`;
+    KB_PENDING_FILE = "";
+    document.getElementById('kbUrl').value = '';
+    loadKbStatus();
+  } catch (e) {
+    kbSetStep('ingest','err');
+    setStatus('kbStatus','err','失败');
+    document.getElementById('kbBody').innerHTML = `<p style="color:var(--error)">入库失败：${escapeHtml(e.message)}</p>`;
+  }
+}
+
+let KB_PENDING_OPEN = false;
+async function toggleKbPending(){
+  const box = document.getElementById('kbPendingBody');
+  KB_PENDING_OPEN = !KB_PENDING_OPEN;
+  if (!KB_PENDING_OPEN) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div class="skeleton"></div>';
+  try {
+    const r = await fetch('/api/kb/pending');
+    const d = await r.json();
+    if (!d.items || !d.items.length) { box.innerHTML = '<p style="color:var(--text-muted)">暂无待审候选。</p>'; return; }
+    box.innerHTML = '<p style="font-size:12px;color:var(--text-muted);margin-bottom:6px">待审候选（点「选它」可确认归类入库）：</p>' +
+      d.items.slice(0,30).map(it => `
+        <div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="flex:1;min-width:0;font-size:12.5px">${escapeHtml(it.title||'')} <span class="chip">${escapeHtml(it.quality||'')}</span></span>
+          <button class="btn secondary" style="padding:2px 9px" onclick='pickKbPending(${JSON.stringify(it.saved||"")})'>选它</button>
+        </div>`).join('');
+  } catch (e) { box.innerHTML = `<p style="color:var(--error)">读取失败：${escapeHtml(e.message)}</p>`; }
+}
+
+function pickKbPending(saved){
+  if (!saved) { showToast('该候选缺少路径'); return; }
+  KB_PENDING_FILE = saved;
+  kbResetSteps(); kbSetStep('collect','done'); kbSetStep('score','done'); kbSetStep('confirm','active');
+  setStatus('kbStatus','ok','待确认');
+  document.getElementById('kbBody').innerHTML = `
+    <div class="kb-preview">
+      <div class="pv-title">${escapeHtml(saved.split('/').pop())}</div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--text-muted)">归类到</span>
+        <select class="input compact" id="kbSubdir" style="max-width:160px">
+          <option value="learning_resources">学习资源</option>
+          <option value="career_paths">职业路线</option>
+          <option value="experience_posts">经验贴</option>
+        </select>
+        <button class="btn" onclick="kbPromote()">确认入库</button>
+        <button class="btn secondary" onclick="kbCancelCandidate()">放弃</button>
+      </div>
+    </div>`;
+}
+
 // ===== Boot =====
+document.getElementById('jdInput')?.addEventListener('input', updateJDFlowState);
+document.getElementById('kbFile')?.addEventListener('change', e => kbAddFile(e.target.files[0]));
+updateJDFlowState();
 loadProfile();
 loadDaily();
 loadToday();
 pingHealth();
+loadCurrentPlan();
+loadKbStatus();
 </script>
 </body>
 </html>

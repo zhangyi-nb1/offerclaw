@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OfferClaw · CareerFlow Stepper</title>
+<title>OfferClaw · CareerFlow 流程</title>
 <style>
   :root {
     --bg: #FAFAF9;
@@ -368,25 +368,17 @@
   <div class="page-head">
     <div class="page-mark">OC</div>
     <div>
-      <div class="page-title">CareerFlow Stepper</div>
+      <div class="page-title">CareerFlow 流程</div>
       <div class="page-meta">
-        8 节点 LangGraph 编排：<code>profile → job_input → match → gap → plan → today → resume → application_suggest</code>
+        8 步流程：画像 → JD → 匹配 → 缺口 → 计划 → 今日建议 → 简历素材 → 投递判断
       </div>
     </div>
   </div>
 
   <div class="page-nav">
-    <a href="/ui">
+    <a href="/ui?rev=latest">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       返回工作台
-    </a>
-    <a href="/docs" target="_blank">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      Swagger
-    </a>
-    <a href="/health" target="_blank">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-      Health
     </a>
   </div>
 
@@ -422,14 +414,14 @@
 
 <script>
 const STEPS = [
-  {key:"profile",             title:"加载用户画像",  desc:"从 user_profile.md 解析 13 字段（含 mtime 缓存）"},
-  {key:"job_input",            title:"导入 JD",       desc:"接收 JD 原文 / discovery 抽取结果"},
-  {key:"match",                title:"规则版匹配",     desc:"调 match_job → 三档结论 + 缺口清单"},
-  {key:"gap",                  title:"分析缺口",       desc:"按 硬技能 / 软技能 / 经历 三类拆分"},
-  {key:"plan",                 title:"4 周计划骨架",   desc:"基于缺口生成可校验的 plan_outline"},
-  {key:"today",                title:"今日执行建议",   desc:"career_agent 状态机驱动 + 本次 JD 上下文"},
-  {key:"resume",               title:"简历骨架",       desc:"skip_llm=True 时仅产关键词命中骨架"},
-  {key:"application_suggest",  title:"投递建议",       desc:"是否加入 applications.md（patch 待用户确认）"},
+  {key:"profile",             title:"加载用户画像",  desc:"读取你的求职画像"},
+  {key:"job_input",            title:"导入 JD",       desc:"整理岗位信息"},
+  {key:"match",                title:"规则版匹配",     desc:"判断当前是否适合投递"},
+  {key:"gap",                  title:"分析缺口",       desc:"拆出需要补齐的能力和经历"},
+  {key:"plan",                 title:"4 周计划骨架",   desc:"生成可执行的行动框架"},
+  {key:"today",                title:"今日执行建议",   desc:"给出今天最该做的事"},
+  {key:"resume",               title:"简历骨架",       desc:"整理可用于简历的素材"},
+  {key:"application_suggest",  title:"投递建议",       desc:"判断是否加入投递池"},
 ];
 
 function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({

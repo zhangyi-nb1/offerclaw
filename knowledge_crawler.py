@@ -215,12 +215,15 @@ def redact_secrets(text: str) -> tuple:
     return text, n
 
 
-def _score_and_save(text: str, url: str, origin: str) -> dict:
+def _score_and_save(text: str, url: str, origin: str, force_keep: bool = False) -> dict:
     """对一段正文打分并存入 _pending/web/（reject 不落盘）。
 
     crawl（requests/Playwright）与 from-text（浏览器插件采集）共用此后处理，
     保证两条采集轨道走同一质量门 + 同一落盘格式。``origin`` 记入 tags 便于溯源。
     采集内容会先做**密钥脱敏**（第三方文档常含泄露 key），再打分落盘。
+
+    ``force_keep=True``（用户主动上传的本地文档）：即便相关性判为 REJECT 也仍落盘
+    （降级为 C 档供人工确认），尊重"用户自己选的资料"；但真正空/过短仍拒绝。
 
     返回里**显式带上来源 URL、本地绝对路径、采集统计、内容预览**，
     方便审核：①点 source_url 看来源质量 ②开 saved_abs 看采集是否完整。
@@ -233,10 +236,15 @@ def _score_and_save(text: str, url: str, origin: str) -> dict:
                 "reason": "正文过短或为空", "saved": None, "saved_abs": None,
                 "next": "内容不足，未入 _pending"}
     score = score_content(text)
-    if score["grade"] == "REJECT":
+    if score["grade"] == "REJECT" and not force_keep:
         return {"status": "rejected", "source_url": url, "grade": "REJECT",
                 "reason": score["reason"], "saved": None, "saved_abs": None,
                 "next": "内容无效/无关，已丢弃，未入 _pending"}
+    if score["grade"] == "REJECT":  # force_keep：降级 C 仍落盘
+        score = {**score, "grade": "C",
+                 "suggested_subdir": score.get("suggested_subdir") or "learning_resources",
+                 "suggested_title": score.get("suggested_title") or "",
+                 "reason": f"用户主动上传（原判：{score.get('reason','')}）"}
 
     title = score["suggested_title"] or slugify(url, 30)
     today = datetime.date.today().isoformat()
