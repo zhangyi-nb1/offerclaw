@@ -134,9 +134,17 @@ def _split_gap_queries(gaps: str, direction: str = "") -> list[str]:
     items = []
     for ln in gaps.splitlines():
         s = ln.strip().lstrip("-*0123456789.、 ").strip()
-        # 去掉"技能缺口："这类小标题前缀
+        # 去掉整行包裹的【】小标题括号（前端缺口卡用 【硬门槛缺口】 这种格式）
+        s = s.strip("【】 ").strip()
+        # 去掉"技能缺口："这类冒号前缀小标题
         if "：" in s and len(s.split("：", 1)[0]) <= 6:
             s = s.split("：", 1)[1].strip()
+        if not s:
+            continue
+        # 跳过纯分类小标题（硬门槛缺口/技能缺口/经历缺口/建议…），它们是结构标签而非检索内容。
+        # 限长 ≤8，避免误杀「…能力缺口」这类描述性长句。
+        if (s.endswith("缺口") and len(s) <= 8) or s in ("建议", "总结", "说明", "备注"):
+            continue
         if len(s) >= 6:
             items.append(s)
     if not items:

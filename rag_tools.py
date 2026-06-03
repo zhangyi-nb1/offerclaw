@@ -74,7 +74,8 @@ def _normalise_provider(provider: str) -> str:
     return aliases.get(p, p)
 
 
-EMBEDDING_PROVIDER = _normalise_provider(_env("EMBEDDING_PROVIDER", "zhipu"))
+# 默认 provider：**本地 bge**（无额度、无网络、稳定）。可用 EMBEDDING_PROVIDER 覆盖回 bailian/zhipu。
+EMBEDDING_PROVIDER = _normalise_provider(_env("EMBEDDING_PROVIDER", "local"))
 
 
 def _default_embedding_model(provider: str) -> str:
@@ -83,7 +84,7 @@ def _default_embedding_model(provider: str) -> str:
     if provider == "openai_compatible":
         return "text-embedding-3-small"
     if provider == "local":
-        return "BAAI/bge-m3"
+        return "BAAI/bge-base-zh-v1.5"  # 默认本地模型：体积小、下载稳、中文强
     return "embedding-3"
 
 
@@ -98,8 +99,12 @@ def _default_embedding_base_url(provider: str) -> str:
 def _default_embedding_dimensions(provider: str, model: str) -> int | None:
     if provider == "bailian":
         return 1024
-    if provider == "local" and "bge-m3" in model:
-        return 1024
+    if provider == "local":
+        if "bge-m3" in model:
+            return 1024
+        if "bge-base" in model or "bge-large" in model:
+            return 768   # bge-base/large-zh-v1.5 均 768 维
+        return None
     if provider == "zhipu" and model == "embedding-3":
         return 2048
     return None
@@ -419,7 +424,13 @@ def get_embeddings_batch(
 
 
 def fake_embedding(text: str, dim: int | None = None) -> list[float]:
-    """Deterministic fake vector for offline ingest/query smoke tests."""
+    """Deterministic fake vector for offline ingest/query smoke tests.
+
+    注意：必须用「无符号整数」解包哈希字节再归一化，**不能**用 ``struct.unpack('f')``
+    把任意字节当 IEEE-754 float32 —— 后者约 95% 概率落到 NaN/Inf 位模式，会被
+    ChromaDB 直接拒绝（embeddings must not contain NaN/Infinity），导致无 API key
+    的离线 ingest 崩溃或污染向量库。整数解包恒为有限值。
+    """
     import struct
 
     dim = dim or get_embedding_config().get("dimensions") or 384
@@ -428,11 +439,12 @@ def fake_embedding(text: str, dim: int | None = None) -> list[float]:
     while len(extended) < dim * 4:
         h = hashlib.sha256(h).digest()
         extended += h
-    floats = struct.unpack(f"{dim}f", extended[: dim * 4])
-    mn, mx = min(floats), max(floats)
+    ints = struct.unpack(f"{dim}I", extended[: dim * 4])  # 无符号 32-bit，恒有限
+    mn, mx = min(ints), max(ints)
     if mx == mn:
         return [0.5] * dim
-    return [(v - mn) / (mx - mn) for v in floats]
+    span = mx - mn
+    return [(v - mn) / span for v in ints]
 
 
 # =====================================================

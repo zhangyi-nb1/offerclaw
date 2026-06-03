@@ -53,6 +53,35 @@ def test_split_gap_queries_per_item():
     assert any("工具调用" in q for q in qs)
 
 
+def test_split_gap_queries_drops_bracket_headers():
+    """前端缺口卡用【硬门槛缺口】这种方括号小标题；它们是结构标签，不能当检索 query。"""
+    ui_gaps = (
+        "【硬门槛缺口】\n"
+        "- 缺少大规模分布式训练经验\n"
+        "- 缺少线上 LLM 服务部署经历\n"
+        "【技能缺口】\n"
+        "- RAG 工程化深度不足\n"
+        "【建议】\n"
+        "- 补充一个端到端 RAG 项目\n"
+    )
+    qs = plan_gen._split_gap_queries(ui_gaps, direction="大模型应用工程师")
+    # 4 条实质内容；【硬门槛缺口】【技能缺口】【建议】等纯标题不得出现
+    assert len(qs) == 4
+    joined = "\n".join(qs)
+    assert "【硬门槛缺口】" not in joined
+    assert "【技能缺口】" not in joined
+    assert "【建议】" not in joined
+    assert any("分布式训练" in q for q in qs)
+    assert any("RAG 工程化" in q for q in qs)
+
+
+def test_split_gap_queries_keeps_descriptive_sentence_ending_with_quekou():
+    """以「…能力缺口」结尾的描述性长句是实质内容，不能被小标题过滤误杀。"""
+    qs = plan_gen._split_gap_queries("- 存在明显的 RAG 工程化端到端能力缺口")
+    assert len(qs) == 1
+    assert "能力缺口" in qs[0]
+
+
 def test_clean_snippet_strips_frontmatter_and_blockquote():
     doc = (
         '---\n'
