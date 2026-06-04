@@ -333,8 +333,10 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
         system_content += (
             f"\n========== 用户当前计划（最新版，可能含用户手动调整）==========\n{prev_plan}\n"
             "再规划时的要求：在这份现有计划基础上**演进**——保留仍然有效的安排，"
-            "只针对新缺口/新调整说明做增量更新；**尊重用户手动改过的内容**（不要无故推翻）；"
-            "保持周次结构与已投入的进度连续，不要从零重排一份毫不相干的计划。\n"
+            "只针对新缺口/新调整说明做增量更新；**尊重用户手动改过的内容**（不要无故推翻）。\n"
+            "⚠️ 演进指的是**内容连续**（衔接已完成的进度、保留有效安排），"
+            "**日期与周次必须重排**：新计划一律从今天开始、从 Week 1 连续编号且 Week 1 包含今天；"
+            "绝不允许沿用旧计划的周次、从 Week 2 开始输出、或把起始日推迟到未来。\n"
         )
 
     project_directive = ""
@@ -643,6 +645,38 @@ def summarize_plan_for_automation(today_iso: str | None = None) -> dict:
         idx = max(1, min(idx, len(weeks)))
         current_week = next((w for w in weeks if w["n"] == idx), weeks[idx - 1])
 
+    # 日计划层：定位"今天"的具体任务（供每日执行栏逐日对照，而非只到周粒度）。
+    # 支持 D1（06-05 周五）/ 2026-06-05（周五）等日期行格式。
+    today_tasks: list[str] = []
+    day_re = re.compile(
+        r"(?:D\d+\s*[（(]\s*)?(?:(\d{4})-)?(\d{1,2})-(\d{1,2})\s*[ ）)（(]*周[一二三四五六日天]")
+    day_marks: list[tuple[int, datetime.date]] = []
+    base_year = period_start.year if period_start else today.year
+    for i, ln in enumerate(lines):
+        m = day_re.search(ln)
+        if not m:
+            continue
+        y = int(m.group(1)) if m.group(1) else base_year
+        try:
+            d = datetime.date(y, int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            continue
+        day_marks.append((i, d))
+    for k, (i, d) in enumerate(day_marks):
+        if d != today:
+            continue
+        end = day_marks[k + 1][0] if k + 1 < len(day_marks) else len(lines)
+        for ln in lines[i + 1:end]:
+            s = ln.strip()
+            if re.match(r"^(—|##|###|Week\s*\d)", s):   # 出了日块就停
+                break
+            mt = re.match(r"^\d+\.\s*(.+)", s)
+            if mt:
+                today_tasks.append(mt.group(1).strip())
+            if len(today_tasks) >= 5:
+                break
+        break
+
     return {
         "has_plan": True,
         "plan_file": latest["filename"],
@@ -652,6 +686,7 @@ def summarize_plan_for_automation(today_iso: str | None = None) -> dict:
         "current_week": current_week,
         "weeks": weeks,
         "week_count": len(weeks),
+        "today_tasks": today_tasks,
     }
 
 

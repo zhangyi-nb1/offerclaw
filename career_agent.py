@@ -187,8 +187,13 @@ def get_today_advice() -> Dict[str, object]:
 
     # 2.7) 今日对照清单（today_plan）：OfferClaw 给出的"今天该做的"，
     #      供每日执行卡对照执行 + 留痕提交后自动判定未完成。
+    #      优先用计划"日计划层"里今天这一天的具体任务（逐日不同）；
+    #      日层没覆盖到今天（如已进入未展开的 Week 2+）才退回周粒度。
     today_plan: List[str] = []
-    if cw:
+    day_tasks = (plan.get("today_tasks") or []) if plan.get("has_plan") else []
+    if day_tasks:
+        today_plan.extend(f"【今日任务】{t}" for t in day_tasks[:4])
+    elif cw:
         today_plan.append(f"推进本周主线（第{cw['n']}周）：{cw['theme']}")
         if cw.get("deliverable"):
             today_plan.append(f"向本周交付推进：{cw['deliverable']}")

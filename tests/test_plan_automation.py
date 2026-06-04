@@ -39,6 +39,50 @@ def test_summarize_picks_week_by_date(monkeypatch):
     assert s4["current_week"]["deliverable"]
 
 
+_PLAN_WITH_DAYS = PLAN + """
+— Week 1 日计划层 —
+2026-06-05（周五）
+  核心任务：
+    1. 完成 Python 模块化学习（预计 4h）
+    2. 绘制 RAG 流程图（预计 3h）
+  可选任务：
+    1. 整理笔记（1h）
+D2（06-06 周六）
+  核心任务：
+    1. 跑通最小检索 demo（预计 5h）
+"""
+
+
+def test_summarize_extracts_today_tasks_per_day(monkeypatch):
+    """日计划层逐日解析：今天取今天的任务，明天取明天的，超出日层为空（退回周粒度）。"""
+    monkeypatch.setattr(plan_gen, "load_latest_plan",
+                        lambda: {"content": _PLAN_WITH_DAYS, "filename": "p.md",
+                                 "mtime": 0, "edited_by_user": False})
+    t5 = plan_gen.summarize_plan_for_automation("2026-06-05")["today_tasks"]
+    assert len(t5) == 3 and "Python 模块化" in t5[0] and "整理笔记" in t5[2]
+    t6 = plan_gen.summarize_plan_for_automation("2026-06-06")["today_tasks"]
+    assert len(t6) == 1 and "检索 demo" in t6[0]
+    assert plan_gen.summarize_plan_for_automation("2026-06-12")["today_tasks"] == []
+
+
+def test_today_advice_prefers_day_tasks(monkeypatch):
+    """每日执行栏：日层覆盖到今天 → 显示当天具体任务而非周粒度。"""
+    import datetime
+    import career_agent
+    monkeypatch.setattr(plan_gen, "load_latest_plan",
+                        lambda: {"content": _PLAN_WITH_DAYS, "filename": "p.md",
+                                 "mtime": 0, "edited_by_user": False})
+
+    class _D(datetime.date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 6, 5)
+    monkeypatch.setattr(career_agent.datetime, "date", _D)
+    tp = career_agent.get_today_advice()["today_plan"]
+    assert any("【今日任务】" in t and "Python 模块化" in t for t in tp)
+    assert not any("推进本周主线" in t for t in tp)   # 有日任务时不再用周粒度兜底
+
+
 def test_summarize_flags_expired(monkeypatch):
     monkeypatch.setattr(plan_gen, "load_latest_plan", lambda: _fake_latest())
     s = plan_gen.summarize_plan_for_automation("2026-07-15")
