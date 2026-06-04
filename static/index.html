@@ -1490,6 +1490,9 @@ async function doPlan(revisionNote = ''){
             streamEl.classList.remove('cursor');
             setStatus('planStatus', 'ok', '已生成');
             markFlowDone('plan');
+            if (c.changes && c.changes.length) {
+              showToast('🔁 较上一版：' + c.changes.slice(0, 2).join('；'));
+            }
             loadCurrentPlan();   // 生成完毕 → 重新拉取并以 markdown 渲染当前计划
             return;
           } else if (c.error) { throw new Error(c.error); }

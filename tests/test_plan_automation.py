@@ -99,6 +99,59 @@ def test_normalize_plan_dates_fixes_llm_date_drift():
     assert "计划周期：2026-06-05 → 2026-06-09" in out
 
 
+def test_summarize_plan_changes_diff():
+    old = ("计划周期：2026-06-05 → 2026-07-02\n"
+           "Week 1 (06-05 → 06-11) 主题：夯实基础\nWeek 2 (06-12 → 06-18) 主题：RAG 实战\n")
+    new = ("计划周期：2026-06-09 → 2026-06-29\n"
+           "Week 1 (06-09 → 06-15) 主题：夯实基础\nWeek 2 (06-16 → 06-22) 主题：Agent 工具调用\n")
+    ch = plan_gen.summarize_plan_changes(old, new)
+    assert any("周期：" in c for c in ch)
+    assert any("Week2：RAG 实战 → Agent 工具调用" in c for c in ch)
+    assert not any("Week1" in c for c in ch)        # 主题没变的周不报
+    # 完全一致 → 给"整体一致"提示
+    same = plan_gen.summarize_plan_changes(old, old)
+    assert same == ["与上一版整体一致（细节微调）"]
+
+
+def test_prepare_injects_adjustments_and_windows_log(monkeypatch, tmp_path):
+    """P0 验证：复盘调整规则进入计划生成 system；daily_log 仅注入近 14 天 + 省略说明。"""
+    import datetime as _dt
+    monkeypatch.setattr(plan_gen, "load_latest_plan", lambda: None)
+    monkeypatch.setattr(plan_gen, "retrieve_learning_resources", lambda *a, **k: [])
+    # 构造 30 天的长日志（仅近 3 天在 14 天窗口内）
+    today = _dt.date.today()
+    blocks = []
+    for i in range(30):
+        d = (today - _dt.timedelta(days=i)).isoformat()
+        blocks.append(f"## {d}\n### 已完成\n- 第{i}天的工作内容，足够长足够长足够长足够长")
+    log_path = tmp_path / "daily_log.md"
+    log_path.write_text("\n".join(blocks), encoding="utf-8")
+    monkeypatch.setattr(plan_gen, "DAILY_LOG_PATH", str(log_path))
+    # 注入调整规则
+    import memory_layers
+    monkeypatch.setattr(plan_gen, "prepare_plan_messages", plan_gen.prepare_plan_messages)
+    monkeypatch.setattr(memory_layers, "get_active_adjustments",
+                        lambda sem: ["最近 3 天偏离度均 ≥ 50，建议下调每日任务量"])
+    msgs, _ = plan_gen.prepare_plan_messages("技能缺口：\n- 缺少 RAG 实战")
+    sysm = msgs[0]["content"]
+    assert "复盘沉淀的调整规则" in sysm and "下调每日任务量" in sysm
+    assert "仅注入近 14 天留痕" in sysm and "共 30 天已省略" in sysm
+    assert "第25天的工作内容" not in sysm        # 窗口外内容确实被裁掉
+
+
+def test_growth_journal_append(tmp_path, monkeypatch):
+    import profile_evolution as pe
+    monkeypatch.setattr(pe, "JOURNAL_PATH", str(tmp_path / "growth_journal.md"))
+    p = pe.append_growth_journal("### 建议 1：Python 自评\n- 当前画像：2/5\n- 建议更新：3/5", "2026-06-07")
+    body = open(p, encoding="utf-8").read()
+    assert "成长日志" in body and "不进任何模型上下文" in body   # 首次写入带说明头
+    assert "2026-06-07（2026-W23）" in body and "建议 1" in body
+    assert "采纳情况" in body
+    pe.append_growth_journal("本周画像无需更新", "2026-06-14")
+    body = open(p, encoding="utf-8").read()
+    assert body.count("## 2026-") == 2 and body.count("成长日志") == 1   # append-only，头不重复
+
+
 def _write_log(tmp_path, blocks: dict) -> str:
     md = "\n".join(
         f"## {d}\n### 已完成\n- 做了点别的\n### 未完成\n" + "\n".join(f"- {t}" for t in todos)

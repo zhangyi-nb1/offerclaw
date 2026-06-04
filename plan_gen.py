@@ -292,7 +292,8 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
                    source_policy: str, target_rules: str, gaps: str,
                    resources_block: str = "", project_context: str = "",
                    prev_plan: str = "", revision_note: str = "",
-                   start_date: str = "", end_date: str = "") -> list:
+                   start_date: str = "", end_date: str = "",
+                   adjustments_block: str = "") -> list:
     """组装要发给 LLM 的 messages。
 
     设计：把 5 份依赖文件作为 system 上下文，缺口清单作为 user 消息。
@@ -311,6 +312,14 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
         f"========== daily_log.md ==========\n{daily_log}\n\n"
         f"========== source_policy.md ==========\n{source_policy}\n"
     )
+
+    if adjustments_block:
+        system_content += (
+            f"\n========== 复盘沉淀的调整规则（来自用户实际执行情况）==========\n{adjustments_block}\n"
+            "这些规则是用户多日复盘的真实教训，排期时**必须遵守**："
+            "如提示减量就降低单日任务量、提示拆细就把大任务拆成小步、"
+            "提示某类任务反复未完成就调整其时段或方式。\n"
+        )
 
     if resources_block:
         system_content += (
@@ -525,6 +534,32 @@ def normalize_plan_dates(plan_md: str, start_iso: str = "") -> str:
     return plan_md
 
 
+def summarize_plan_changes(old_md: str, new_md: str) -> list[str]:
+    """重排后输出"较上一版变化"的确定性摘要（不调 LLM）：周期 + 各周主题对比。"""
+    import re
+
+    def _themes(md: str) -> list[str]:
+        return [t.strip() for t in re.findall(r"Week\s*\d+[^\n]*主题[:：]\s*([^\n]+)", md or "")]
+
+    def _period(md: str) -> str:
+        m = re.search(r"计划周期[:：]\s*([\d\-]+\s*→\s*[\d\-]+)", md or "")
+        return m.group(1).replace(" ", "") if m else ""
+
+    changes: list[str] = []
+    po, pn = _period(old_md), _period(new_md)
+    if po and pn and po != pn:
+        changes.append(f"周期：{po} → {pn}")
+    to, tn = _themes(old_md), _themes(new_md)
+    for i in range(max(len(to), len(tn))):
+        a = to[i] if i < len(to) else "（无）"
+        b = tn[i] if i < len(tn) else "（无）"
+        if a != b:
+            changes.append(f"Week{i + 1}：{a[:28]} → {b[:28]}")
+    if not changes:
+        changes.append("与上一版整体一致（细节微调）")
+    return changes
+
+
 def is_degenerate_plan(content: str) -> bool:
     """判定一份"计划"是否是退化产物（LLM 拒绝/报错文本，而非真计划）。
 
@@ -585,9 +620,33 @@ def prepare_plan_messages(gaps: str, revision_note: str = "",
     """
     profile = read_text(PROFILE_PATH)
     plan_prompt = read_text(PLAN_PROMPT_PATH)
-    daily_log = read_text(DAILY_LOG_PATH)
     source_policy = read_text(SOURCE_POLICY_PATH)
     target_rules = read_text(TARGET_RULES_PATH)
+
+    # daily_log 窗口化注入：近 14 天明细 + 历史省略说明（防上下文随月份无限膨胀）
+    daily_log_full = read_text(DAILY_LOG_PATH)
+    daily_log = daily_log_full
+    try:
+        import re
+        from summary_tool import extract_recent_blocks
+        recent = extract_recent_blocks(daily_log_full, days=14)
+        if recent and len(recent) < len(daily_log_full) - 200:
+            total_days = len(re.findall(r"^## \d{4}-\d{2}-\d{2}", daily_log_full, re.M))
+            daily_log = (
+                f"（仅注入近 14 天留痕；全部历史共 {total_days} 天已省略——"
+                "长期执行规律见『复盘沉淀的调整规则』）\n\n" + recent)
+    except Exception:
+        pass
+
+    # 复盘沉淀的调整规则 → 注入计划生成（让"越来越懂用户"真正作用到排期上）
+    adjustments_block = ""
+    try:
+        from memory_layers import SemanticMemory, get_active_adjustments
+        adj = get_active_adjustments(SemanticMemory())
+        if adj:
+            adjustments_block = "\n".join(f"- {a}" for a in adj)
+    except Exception:
+        pass
 
     # 自动补齐元数据标签，避免被 plan_prompt 第 2 步输入检查拒绝
     gaps = ensure_gap_metadata(gaps)
@@ -609,6 +668,7 @@ def prepare_plan_messages(gaps: str, revision_note: str = "",
         gaps, resources_block=resources_block, project_context=project_context,
         prev_plan=prev_plan, revision_note=revision_note,
         start_date=start_date, end_date=end_date,
+        adjustments_block=adjustments_block,
     )
     return messages, resources
 

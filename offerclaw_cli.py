@@ -115,20 +115,26 @@ def cmd_plan(gaps=None):
             "full_plan": plan,
         })
         return
-    from plan_gen import normalize_plan_dates
+    from plan_gen import normalize_plan_dates, load_latest_plan, summarize_plan_changes
     import datetime as _dt
+    prev = load_latest_plan()   # 保存前取上一版，用于"较上版变化"摘要
     plan = normalize_plan_dates(plan, _dt.date.today().isoformat())
     plan = append_resources_appendix(plan, resources)
     path = save_plan(plan)
     themes = _extract_weekly_themes(plan)
-    # 微信友好摘要：每周主题 + 资源数 + 完整计划位置
+    changes = summarize_plan_changes(prev["content"] if prev else "", plan)
+    # 微信友好摘要：每周主题 + 较上版变化 + 资源数 + 完整计划位置
     lines = ["📚 学习计划已生成："]
     lines += [f"  {t}" for t in themes] if themes else ["  （详见完整计划）"]
+    if prev:
+        lines.append("🔁 较上一版变化：")
+        lines += [f"  - {c}" for c in changes[:4]]
     lines.append(f"📎 参考资源 {len(resources)} 份，完整计划：{os.path.relpath(path, BASE_DIR)}")
     _json_out({
         "status": "ok",
         "saved_path": path,
         "weekly_themes": themes,
+        "plan_changes": changes,
         "resource_count": len(resources),
         "wechat_summary": "\n".join(lines),
         "full_plan": plan,
@@ -255,6 +261,64 @@ def cmd_review(date_str=None):
         _json_out({"status": "error", "error": str(e), "date": date_str})
 
 
+def cmd_grow():
+    """周度画像演进：对比画像与近 14 天事实 → 更新建议（人审写回）+ 归档成长日志。
+
+    供周日晚 cron 调用：把 wechat_summary 推给用户；用户采纳后自行改 user_profile.md
+    （或让 OpenClaw 代改），再跑 refresh-state 同步问答记忆。
+    """
+    from profile_evolution import suggest_profile_updates
+    _json_out(suggest_profile_updates())
+
+
+def cmd_refresh_state():
+    """状态类文件重新向量化：删旧 chunks → 增量重摄取，消除 RAG 问答的过期快照。
+
+    覆盖：画像 / daily_log / 投递池 / 面试故事库。微信问答（每次新进程）立即生效；
+    Web 长驻进程的向量检索需重启服务后生效。供周日 cron 或画像更新后调用。
+    """
+    import subprocess
+    import chromadb
+    from rag_tools import get_collection_name
+    state_files = {
+        "user_profile.md": "profile",
+        "daily_log.md": "log",
+        "applications.md": "application",
+        "interview_story_bank.md": "story",
+    }
+    client = chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db"))
+    try:
+        col = client.get_collection(get_collection_name())
+    except Exception as e:
+        _json_out({"status": "error", "error": f"collection 不可用：{e}"})
+        return
+    removed, reingest = {}, {}
+    for fname, stype in state_files.items():
+        if not os.path.exists(os.path.join(BASE_DIR, fname)):
+            removed[fname] = "skip(不存在)"
+            continue
+        try:
+            got = col.get(where={"source": fname})
+            ids = got.get("ids") or []
+            if ids:
+                col.delete(ids=ids)
+            removed[fname] = len(ids)
+        except Exception as e:
+            removed[fname] = f"err({e})"
+        proc = subprocess.run(
+            [os.path.join(BASE_DIR, ".venv/bin/python"), "rag_ingest.py",
+             "--add", fname, "--source-type", stype],
+            cwd=BASE_DIR, capture_output=True, text=True, timeout=600,
+        )
+        reingest[fname] = "ok" if proc.returncode == 0 else "failed"
+    _json_out({
+        "status": "ok",
+        "removed_stale_chunks": removed,
+        "reingest": reingest,
+        "note": "微信问答即时生效；Web 服务的向量检索需重启后生效",
+    })
+
+
 def cmd_doctor():
     import subprocess
     result = subprocess.run(
@@ -315,6 +379,10 @@ def main():
         cmd_log(sys.argv[2])
     elif cmd == "review":
         cmd_review(sys.argv[2] if len(sys.argv) > 2 else None)
+    elif cmd == "grow":
+        cmd_grow()
+    elif cmd == "refresh-state":
+        cmd_refresh_state()
     elif cmd == "doctor":
         cmd_doctor()
     elif cmd == "health":

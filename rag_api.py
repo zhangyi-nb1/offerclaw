@@ -1380,14 +1380,16 @@ async def gen_plan_stream(req: PlanRequest):
 
         def _producer():
             try:
+                from plan_gen import (is_degenerate_plan, normalize_plan_dates,
+                                      load_latest_plan, summarize_plan_changes)
+                prev = load_latest_plan()   # 保存前取上一版，用于变化摘要
                 for tok in call_llm_stream(messages, api_key, max_tokens=7000):
                     full_text.append(tok)
                     loop.call_soon_threadsafe(q.put_nowait, ("tok", tok))
                 raw = "".join(full_text)
                 # 退化产物（拒绝/无周结构）不落盘，避免污染"当前计划"被后续注入自我复制
-                from plan_gen import is_degenerate_plan, normalize_plan_dates
                 if is_degenerate_plan(raw):
-                    loop.call_soon_threadsafe(q.put_nowait, ("done", ""))
+                    loop.call_soon_threadsafe(q.put_nowait, ("done", {"path": "", "changes": []}))
                     return
                 # 日期确定性归一（LLM 连排日期不可信）
                 raw = normalize_plan_dates(
@@ -1399,7 +1401,8 @@ async def gen_plan_stream(req: PlanRequest):
                 if appendix:
                     loop.call_soon_threadsafe(q.put_nowait, ("tok", appendix))
                 path = save_plan(plan_md)
-                loop.call_soon_threadsafe(q.put_nowait, ("done", path))
+                changes = summarize_plan_changes(prev["content"] if prev else "", plan_md)
+                loop.call_soon_threadsafe(q.put_nowait, ("done", {"path": path, "changes": changes if prev else []}))
             except Exception as exc:
                 loop.call_soon_threadsafe(q.put_nowait, ("err", str(exc)))
 
@@ -1409,7 +1412,8 @@ async def gen_plan_stream(req: PlanRequest):
             if kind == "tok":
                 yield f"data: {_json.dumps({'text': val}, ensure_ascii=False)}\n\n"
             elif kind == "done":
-                yield f"data: {_json.dumps({'done': True, 'saved_path': val}, ensure_ascii=False)}\n\n"
+                payload = val if isinstance(val, dict) else {"path": val, "changes": []}
+                yield f"data: {_json.dumps({'done': True, 'saved_path': payload['path'], 'changes': payload['changes']}, ensure_ascii=False)}\n\n"
                 break
             else:
                 yield f"data: {_json.dumps({'error': val}, ensure_ascii=False)}\n\n"
