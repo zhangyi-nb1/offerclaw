@@ -1004,8 +1004,7 @@
             <span class="status-dot" id="planStatus">加载中</span>
           </div>
           <div class="card-actions" id="planActionsView" style="margin-top:0; margin-bottom:12px">
-            <button class="btn" onclick="doPlan(false)" title="把 ③ 的 JD 设为目标（缺口持久入库），再基于累积缺口库生成">设为目标并生成</button>
-            <button class="btn secondary" onclick="doPlan(true)" title="不新增目标，基于现有 画像+知识库+缺口库 重新生成">重新生成</button>
+            <button class="btn" onclick="doPlan()" title="基于 画像+知识库+缺口库 三件套生成/更新计划。目标 JD 只在 ② 匹配后点「设为目标」才会入缺口库——本按钮不会新增目标">生成计划</button>
             <button class="btn secondary" id="planEditBtn" onclick="enterPlanEdit()" style="display:none">编辑计划</button>
           </div>
           <div class="card-actions" id="planActionsEdit" style="margin-top:0; margin-bottom:12px; display:none">
@@ -1344,6 +1343,10 @@ async function doMatch(){
     const kind = d.status === '当前适合投递' ? 'ok' : (d.status === '中长期可转向' ? 'warn' : 'err');
     body.innerHTML = `
       <p><strong>结论</strong> <span class="chip ${kind}">${escapeHtml(d.status||'-')}</span> <span class="chip">${escapeHtml(d.direction||'-')}</span></p>
+      <div style="display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap">
+        <button class="btn" id="setTargetBtn" onclick="addGapTarget()">🎯 设为目标 JD</button>
+        <span style="font-size:11.5px;color:var(--text-muted)">看完分析结果自行判断：设为目标后其缺口才会进入缺口库，被学习计划参考；试错/不合适的岗位不要点。</span>
+      </div>
       <pre>${escapeHtml(d.summary||'')}</pre>`;
     setStatus('matchStatus', kind, d.status||'完成');
     markFlowDone('match');
@@ -1386,37 +1389,40 @@ function renderGaps(gapList, suggestions){
 }
 
 // ===== Plan (SSE) =====
-async function doPlan(useGeneric){
+// ② 匹配后由用户自行判断是否把该 JD 设为目标（缺口才会进缺口库、被计划参考）
+async function addGapTarget(){
+  if (!LAST_GAPS_DICT || !Object.values(LAST_GAPS_DICT).some(v => v && v.length)) {
+    showToast('没有可入库的缺口（先完成一次匹配）'); return;
+  }
+  const btn = document.getElementById('setTargetBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '入库中…'; }
+  try {
+    const jdText = (document.getElementById('jdInput')?.value || '').trim();
+    const r = await fetch('/api/gaps/target', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({jd_text: jdText, gaps: LAST_GAPS_DICT})
+    });
+    const t = await r.json();
+    if (!r.ok) throw new Error(t.detail || r.status);
+    const verb = t.action === 'merged' ? '已合并到既有目标' : '已设为目标';
+    showToast(`🎯 ${verb}：${t.title||'该 JD'}（新缺口 +${t.added_gaps} · 重复 ${t.duplicate_gaps} · 库内共 ${t.merged_gap_count}）`);
+    if (btn) btn.textContent = t.action === 'merged' ? '✓ 已是目标（已合并）' : '✓ 已设为目标';
+    loadGapSummary();
+  } catch (e) {
+    showToast('设为目标失败：' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '🎯 设为目标 JD'; }
+  }
+}
+
+async function doPlan(){
   const body = document.getElementById('planBody');
-  let gaps = '';   // 留空 → 后端自动用缺口库（画像+知识库+缺口库 三件套）
-  if (!useGeneric) {
-    if (LAST_GAPS_DICT && Object.values(LAST_GAPS_DICT).some(v => v && v.length)) {
-      // ③ 有新匹配的缺口：先把该 JD 设为目标（JD+缺口持久入缺口库），计划基于累积库生成
-      try {
-        const jdText = (document.getElementById('jdInput')?.value || '').trim();
-        const r0 = await fetch('/api/gaps/target', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({jd_text: jdText, gaps: LAST_GAPS_DICT})
-        });
-        const t = await r0.json();
-        if (r0.ok) {
-          showToast(`🎯 已设为目标：${t.title||'该 JD'}（新缺口 +${t.added_gaps} · 重复 ${t.duplicate_gaps} · 库内共 ${t.merged_gap_count}）`);
-          loadGapSummary();
-        } else {
-          showToast('目标入库失败：' + (t.detail || r0.status) + '，将直接用现有缺口库生成');
-        }
-      } catch (e) {
-        showToast('目标入库异常：' + e.message);
-      }
-    } else {
-      // ③ 没有新缺口：直接基于已累积的缺口库生成；库也为空才询问通用方向
-      const gs = await fetch('/api/gaps').then(r=>r.json()).catch(()=>null);
-      if (!gs || !gs.merged_gap_count) {
-        if (!confirm('缺口库为空且 ③ 没有新缺口，按"通用方向"生成？')) return;
-      } else {
-        showToast(`基于缺口库生成（目标 JD ${gs.total_targets} 个 · 缺口 ${gs.merged_gap_count} 条）`);
-      }
-    }
+  const gaps = '';   // 留空 → 后端自动用缺口库（画像+知识库+缺口库 三件套）
+  // 计划只参考"已确认的目标 JD 缺口库"；库为空才询问通用方向
+  const gs = await fetch('/api/gaps').then(r=>r.json()).catch(()=>null);
+  if (!gs || !gs.merged_gap_count) {
+    if (!confirm('缺口库为空（还没有设为目标的 JD），按"画像通用方向"生成？')) return;
+  } else {
+    showToast(`基于缺口库生成（目标 JD ${gs.total_targets} 个 · 缺口 ${gs.merged_gap_count} 条）`);
   }
   body.innerHTML = '<pre id="planStream" class="cursor"></pre>';
   const streamEl = document.getElementById('planStream');

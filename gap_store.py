@@ -75,12 +75,27 @@ def _extract_title_company(jd_text: str) -> tuple[str, str]:
     return title, company
 
 
+def _target_identity(title: str, company: str, jd_text: str) -> str:
+    """目标 JD 的身份指纹：标题+公司归一；无有效标题时退回 JD 内容指纹。
+    同一身份的 JD 重复添加 → 合并而非新增（累加原则：重复的不管，新的才记）。"""
+    import hashlib
+    t = _norm_key(title)
+    c = _norm_key(company)
+    if t and t != _norm_key("未命名岗位"):
+        return f"tc:{t}|{c}"
+    norm_jd = re.sub(r"\s+", "", jd_text or "")[:400]
+    return "jd:" + hashlib.md5(norm_jd.encode("utf-8")).hexdigest()[:16]
+
+
 def add_target(jd_text: str, gaps: dict | None, *,
                title: str = "", company: str = "", source: str = "web_match") -> dict:
-    """把一个 JD 设为目标：JD 摘要 + 缺口入库（按归一化文本与已有目标合并去重）。
+    """把一个 JD 设为目标：JD 摘要 + 缺口入库。
 
+    **累加原则**：缺口跨 JD 归一化去重（重复不记）；目标按身份指纹去重——
+    同一 JD 再次添加只把它的新缺口合并进原条目（action=merged），不会多出目标。
     ``gaps``：match 产出的 dict（{分类: [条目...]}）。
-    返回 {status, target_id, added_gaps, duplicate_gaps, total_targets, merged_gap_count}。
+    返回 {status, action(added/merged), target_id, added_gaps, duplicate_gaps,
+          total_targets, merged_gap_count}。
     """
     jd_text = (jd_text or "").strip()
     gaps = gaps or {}
@@ -114,9 +129,36 @@ def add_target(jd_text: str, gaps: dict | None, *,
             new_gaps.setdefault(cat, []).append(str(it).strip())
             added += 1
 
+    # 目标级去重：同一身份的 JD → 合并进已有条目，不新增
+    identity = _target_identity(title, company, jd_text)
+    existing = next(
+        (t for t in data["targets"]
+         if t.get("identity") == identity
+         or (not t.get("identity")
+             and _target_identity(t.get("title", ""), t.get("company", ""),
+                                  t.get("jd_digest", "")) == identity)),
+        None,
+    )
+    if existing is not None:
+        for cat, items in new_gaps.items():
+            existing.setdefault("gaps", {}).setdefault(cat, []).extend(items)
+        existing["identity"] = identity
+        existing["updated_at"] = _now_iso()
+        existing["raw_gap_count"] = sum(len(v or []) for v in gaps.values())
+        _save(data)
+        return {
+            "status": "ok", "action": "merged",
+            "target_id": existing["id"], "title": existing.get("title", title),
+            "company": existing.get("company", company),
+            "added_gaps": added, "duplicate_gaps": dup,
+            "total_targets": len(data["targets"]),
+            "merged_gap_count": len(seen),
+        }
+
     tid = f"tgt_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
     data["targets"].append({
         "id": tid,
+        "identity": identity,
         "added_at": _now_iso(),
         "title": title,
         "company": company,
@@ -128,6 +170,7 @@ def add_target(jd_text: str, gaps: dict | None, *,
     _save(data)
     return {
         "status": "ok",
+        "action": "added",
         "target_id": tid,
         "title": title,
         "company": company,

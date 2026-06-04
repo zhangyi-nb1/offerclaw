@@ -46,6 +46,34 @@ def test_add_second_jd_merges_and_dedupes(tmp_store):
     assert r2["total_targets"] == 2 and r2["merged_gap_count"] == 3
 
 
+def test_same_jd_added_twice_merges_not_duplicates(tmp_store):
+    """累加原则（目标级）：同一 JD 重复设为目标 → 合并进原条目，目标数不变。"""
+    r1 = tmp_store.add_target("岗位名称：大模型应用开发工程师\n公司：G司",
+                              {"技能缺口": ["缺少 RAG 实战"]})
+    assert r1["action"] == "added" and r1["total_targets"] == 1
+    r2 = tmp_store.add_target("岗位名称：大模型应用开发工程师\n公司：G司",
+                              {"技能缺口": ["缺少 RAG 实战", "缺少 Agent 编排经历"]})
+    assert r2["action"] == "merged"
+    assert r2["total_targets"] == 1              # 不新增目标
+    assert r2["duplicate_gaps"] == 1 and r2["added_gaps"] == 1   # 缺口仍按累加去重
+    assert r2["merged_gap_count"] == 2
+
+
+def test_unnamed_jd_dedup_by_content_fingerprint(tmp_store):
+    """无法抽出岗位名的 JD（未命名岗位）按内容指纹判同。"""
+    jd = "与大模型算法工程师紧密合作，负责智能体应用建设与落地。"
+    r1 = tmp_store.add_target(jd, {"技能缺口": ["缺少工具调用经历"]})
+    r2 = tmp_store.add_target(jd, {"技能缺口": ["缺少工具调用经历"]})
+    assert r1["action"] == "added" and r2["action"] == "merged"
+    assert r2["total_targets"] == 1
+
+
+def test_different_jds_both_added(tmp_store):
+    tmp_store.add_target("岗位名称：A岗\n公司：甲", {"技能缺口": ["缺少 RAG 实战"]})
+    r2 = tmp_store.add_target("岗位名称：B岗\n公司：乙", {"技能缺口": ["缺少微调经验"]})
+    assert r2["action"] == "added" and r2["total_targets"] == 2
+
+
 def test_merged_text_compatible_with_plan_gen(tmp_store):
     tmp_store.add_target("岗位名称：X",
                          {"技能缺口": ["缺少 RAG 工程化实战"],
