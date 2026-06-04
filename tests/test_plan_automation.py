@@ -107,6 +107,21 @@ def test_ensure_gap_metadata_preserves_existing_tags():
     assert out.count("致命度") == 1 and "[致命度: 高] [短期性: 不可补]" in out
 
 
+def test_prepare_plan_messages_revision_note_is_one_shot(monkeypatch):
+    """LLM 修改计划：修改要求注入为一次性指令（标注无历史关联），且不传时不出现。"""
+    monkeypatch.setattr(plan_gen, "load_latest_plan", lambda: _fake_latest())
+    monkeypatch.setattr(plan_gen, "retrieve_learning_resources", lambda *a, **k: [])
+    msgs, _ = plan_gen.prepare_plan_messages(
+        "技能缺口：\n- 缺少 RAG 实战",
+        revision_note="第2周太满，RAG 实战往后挪一周")
+    user = msgs[1]["content"]
+    assert "用户本次修改要求（一次性指令" in user
+    assert "RAG 实战往后挪一周" in user and "无历史可关联" in user
+    # 不传时无此段
+    msgs2, _ = plan_gen.prepare_plan_messages("技能缺口：\n- 缺少 RAG 实战")
+    assert "用户本次修改要求" not in msgs2[1]["content"]
+
+
 def test_prepare_plan_messages_gaps_are_tagged(monkeypatch):
     """走 prepare 入口的缺口（CLI/Web 共用）必须已带元数据标签。"""
     monkeypatch.setattr(plan_gen, "load_latest_plan", lambda: None)

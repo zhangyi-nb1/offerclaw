@@ -1005,7 +1005,17 @@
           </div>
           <div class="card-actions" id="planActionsView" style="margin-top:0; margin-bottom:12px">
             <button class="btn" onclick="doPlan()" title="基于 画像+知识库+缺口库 三件套生成/更新计划。目标 JD 只在 ② 匹配后点「设为目标」才会入缺口库——本按钮不会新增目标">生成计划</button>
+            <button class="btn secondary" id="planReviseBtn" onclick="enterPlanRevise()" title="用一段话描述哪里不满意、希望怎么改，LLM 结合背景信息重新制定——适合问题较多时，不用逐条手改">LLM 修改计划</button>
             <button class="btn secondary" id="planEditBtn" onclick="enterPlanEdit()" style="display:none">编辑计划</button>
+          </div>
+          <div id="planRevisePanel" style="display:none; margin-bottom:12px">
+            <textarea class="textarea" id="planReviseText" placeholder="描述你对当前计划哪里不满意、希望怎么改（例：第2周太满，把 RAG 实战往后挪一周；增加每天 1 小时八股；周末留空…）" style="min-height:72px"></textarea>
+            <p style="font-size:11px;color:var(--text-muted);margin:6px 0">
+              ⚠️ 请<strong>一次性说清全部要求</strong>：修改要求不具备记忆性，本地不会保留——下一次输入不会关联本次的旧要求。</p>
+            <div class="card-actions" style="margin-top:0">
+              <button class="btn" onclick="submitPlanRevise()">按要求重新制定</button>
+              <button class="btn secondary" onclick="cancelPlanRevise()">取消</button>
+            </div>
           </div>
           <div class="card-actions" id="planActionsEdit" style="margin-top:0; margin-bottom:12px; display:none">
             <button class="btn" onclick="savePlanEdit()">保存计划</button>
@@ -1414,24 +1424,44 @@ async function addGapTarget(){
   }
 }
 
-async function doPlan(){
+// ===== LLM 修改计划：一次性自然语言修改要求（无记忆，不落盘）=====
+function enterPlanRevise(){
+  document.getElementById('planRevisePanel').style.display = 'block';
+  document.getElementById('planReviseText').focus();
+}
+function cancelPlanRevise(){
+  document.getElementById('planRevisePanel').style.display = 'none';
+  document.getElementById('planReviseText').value = '';   // 不保留：无记忆性
+}
+function submitPlanRevise(){
+  const note = (document.getElementById('planReviseText').value || '').trim();
+  if (!note) { showToast('先描述你想怎么改（一次性说清全部要求）'); return; }
+  cancelPlanRevise();   // 收起并清空——要求不保留，下次输入不关联本次
+  doPlan(note);
+}
+
+async function doPlan(revisionNote = ''){
   const body = document.getElementById('planBody');
   const gaps = '';   // 留空 → 后端自动用缺口库（画像+知识库+缺口库 三件套）
-  // 计划只参考"已确认的目标 JD 缺口库"；库为空才询问通用方向
-  const gs = await fetch('/api/gaps').then(r=>r.json()).catch(()=>null);
-  if (!gs || !gs.merged_gap_count) {
-    if (!confirm('缺口库为空（还没有设为目标的 JD），按"画像通用方向"生成？')) return;
+  if (revisionNote) {
+    showToast('按你的修改要求重新制定计划…（要求仅本次生效）');
   } else {
-    showToast(`基于缺口库生成（目标 JD ${gs.total_targets} 个 · 缺口 ${gs.merged_gap_count} 条）`);
+    // 计划只参考"已确认的目标 JD 缺口库"；库为空才询问通用方向
+    const gs = await fetch('/api/gaps').then(r=>r.json()).catch(()=>null);
+    if (!gs || !gs.merged_gap_count) {
+      if (!confirm('缺口库为空（还没有设为目标的 JD），按"画像通用方向"生成？')) return;
+    } else {
+      showToast(`基于缺口库生成（目标 JD ${gs.total_targets} 个 · 缺口 ${gs.merged_gap_count} 条）`);
+    }
   }
   body.innerHTML = '<pre id="planStream" class="cursor"></pre>';
   const streamEl = document.getElementById('planStream');
-  setStatus('planStatus', 'run', '生成中');
+  setStatus('planStatus', 'run', revisionNote ? '按要求重制中' : '生成中');
   markFlowRun('plan');
   try {
     const r = await fetch('/api/plan/stream', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({gaps: gaps})
+      body: JSON.stringify({gaps: gaps, revision_note: revisionNote})
     });
     if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
     const reader = r.body.getReader();

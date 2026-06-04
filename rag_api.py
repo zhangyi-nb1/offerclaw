@@ -183,6 +183,7 @@ class FlowRunResponse(BaseModel):
 
 class PlanRequest(BaseModel):
     gaps: str = ""
+    revision_note: str = ""   # LLM 修改计划：用户一次性修改要求（无记忆，不落盘）
 
 
 class PlanResponse(BaseModel):
@@ -652,7 +653,7 @@ async def gen_plan(req: PlanRequest):
             raise HTTPException(status_code=500, detail=f"{api_key_env} 未配置")
         gaps = _resolve_plan_gaps(req.gaps)
         # 统一入口：读依赖 + RAG 检索资源 + 组装 messages（与 CLI 一致）
-        messages, resources = prepare_plan_messages(gaps)
+        messages, resources = prepare_plan_messages(gaps, revision_note=req.revision_note)
         loop = asyncio.get_event_loop()
         plan_md = await loop.run_in_executor(
             None, lambda: call_llm_plain(messages, api_key, max_tokens=3500)
@@ -1362,7 +1363,7 @@ async def gen_plan_stream(req: PlanRequest):
     )
     gaps = _resolve_plan_gaps(req.gaps)
     # 统一入口：读依赖 + RAG 检索资源 + 组装 messages（与 CLI / 非流式一致）
-    messages, resources = prepare_plan_messages(gaps)
+    messages, resources = prepare_plan_messages(gaps, revision_note=req.revision_note)
 
     async def generate():
         loop = asyncio.get_event_loop()

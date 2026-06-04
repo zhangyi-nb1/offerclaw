@@ -291,7 +291,7 @@ def format_resources_block(resources: list[dict]) -> str:
 def build_messages(profile: str, plan_prompt: str, daily_log: str,
                    source_policy: str, target_rules: str, gaps: str,
                    resources_block: str = "", project_context: str = "",
-                   prev_plan: str = "") -> list:
+                   prev_plan: str = "", revision_note: str = "") -> list:
     """组装要发给 LLM 的 messages。
 
     设计：把 5 份依赖文件作为 system 上下文，缺口清单作为 user 消息。
@@ -346,10 +346,19 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
             "不要让用户从零再造一个同类项目。每条这类任务用『建议你…』措辞，"
             "OfferClaw 只建议、不代为开发。纯基础类缺口（如 Python 语法）可正常安排学习任务。"
         )
+    revision_directive = ""
+    if (revision_note or "").strip():
+        revision_directive = (
+            "\n\n【用户本次修改要求（一次性指令，仅本次生效，无历史可关联）】\n"
+            + revision_note.strip() + "\n"
+            "处理方式：在 system 里『用户当前计划』的基础上，**优先理解并满足上述修改要求**"
+            "（哪里不满意、希望怎么改），其余仍然有效的安排保留；事实与资源仍只能来自"
+            "画像/知识库/缺口清单，不为迎合要求而编造。"
+        )
     user_content = (
         "请按 plan_prompt.md 的 9 步流程，基于下面这份缺口清单生成 4 周计划。\n"
         "今天日期是 " + datetime.date.today().isoformat() + "。"
-        + project_directive + "\n\n"
+        + project_directive + revision_directive + "\n\n"
         "========== 缺口清单 ==========\n" + gaps
     )
 
@@ -483,7 +492,7 @@ def ensure_gap_metadata(gaps: str) -> str:
     return "\n".join(out)
 
 
-def prepare_plan_messages(gaps: str) -> tuple[list, list[dict]]:
+def prepare_plan_messages(gaps: str, revision_note: str = "") -> tuple[list, list[dict]]:
     """读依赖文件 + RAG 检索资源 + 组装 messages 的统一入口。
 
     CLI 与 FastAPI（/api/plan、/api/plan/stream）共用此函数，确保三条
@@ -515,7 +524,7 @@ def prepare_plan_messages(gaps: str) -> tuple[list, list[dict]]:
     messages = build_messages(
         profile, plan_prompt, daily_log, source_policy, target_rules,
         gaps, resources_block=resources_block, project_context=project_context,
-        prev_plan=prev_plan,
+        prev_plan=prev_plan, revision_note=revision_note,
     )
     return messages, resources
 
