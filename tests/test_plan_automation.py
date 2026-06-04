@@ -181,6 +181,56 @@ def test_merged_gaps_text_caps_injection(tmp_path, monkeypatch):
     assert "因注入上限省略" not in full
 
 
+def test_growth_metrics_week_stats_and_trend(tmp_path, monkeypatch):
+    """养成指标：本周/上周 留痕与完成率统计正确，趋势箭头方向正确。"""
+    import datetime as _dt
+    import profile_evolution as pe
+    today = _dt.date(2026, 6, 14)
+    lines = []
+    # 本周（6-08~6-14）：3 天留痕，完成 4 / 未完成 2 → 66.7%
+    for d, done, todo in [("2026-06-09", 2, 1), ("2026-06-11", 1, 1), ("2026-06-13", 1, 0)]:
+        lines.append(f"## {d}\n### 已完成\n" + "\n".join(f"- 做了{i}" for i in range(done))
+                     + "\n### 未完成\n" + "\n".join(f"- 没做{i}" for i in range(todo)))
+    # 上周（6-01~6-07）：1 天留痕，完成 1 / 未完成 3 → 25%
+    lines.append("## 2026-06-03\n### 已完成\n- 仅一项\n### 未完成\n- 没做甲\n- 没做乙\n- 没做丙")
+    log = tmp_path / "daily_log.md"
+    log.write_text("\n".join(lines), encoding="utf-8")
+    monkeypatch.setattr(pe, "DAILY_LOG_PATH", str(log))
+    monkeypatch.setattr(pe, "METRICS_STATE_PATH", str(tmp_path / "metrics.json"))
+    # 隔离 plans 目录与外部依赖
+    plans = tmp_path / "plans"
+    plans.mkdir()
+    (plans / "plan_20260612_120000.md").write_text("x", encoding="utf-8")
+    (plans / "plan_20260613_120000_user.md").write_text("x", encoding="utf-8")
+    (plans / "plan_20260601_120000.md").write_text("x", encoding="utf-8")   # 上周，不计
+    monkeypatch.setattr(plan_gen, "_plans_dir", lambda: str(plans))
+
+    m = pe.compute_growth_metrics("2026-06-14")
+    assert m["current"]["days_logged"] == 3 and m["current"]["completion_rate"] == 66.7
+    assert m["previous"]["days_logged"] == 1 and m["previous"]["completion_rate"] == 25.0
+    assert m["current"]["replans"] == 1 and m["current"]["manual_edits"] == 1
+
+    md = pe.format_metrics_md(m)
+    assert "本周养成指标" in md and "3/7 天" in md
+    assert "66.7%" in md and "↑✅" in md          # 完成率上升=好
+    # 快照已落盘（供下周算增量）
+    snaps = pe._load_metric_snapshots()
+    assert snaps and snaps[-1]["completion_rate"] == 66.7
+
+
+def test_growth_metrics_zero_log_warning(tmp_path, monkeypatch):
+    import profile_evolution as pe
+    log = tmp_path / "daily_log.md"
+    log.write_text("# 空", encoding="utf-8")
+    monkeypatch.setattr(pe, "DAILY_LOG_PATH", str(log))
+    monkeypatch.setattr(pe, "METRICS_STATE_PATH", str(tmp_path / "m.json"))
+    monkeypatch.setattr(plan_gen, "_plans_dir", lambda: str(tmp_path))
+    m = pe.compute_growth_metrics("2026-06-14")
+    md = pe.format_metrics_md(m)
+    assert "本周零留痕" in md and "空转" in md     # 零留痕要明确警示
+    assert m["current"]["completion_rate"] is None
+
+
 def test_growth_journal_append(tmp_path, monkeypatch):
     import profile_evolution as pe
     monkeypatch.setattr(pe, "JOURNAL_PATH", str(tmp_path / "growth_journal.md"))
