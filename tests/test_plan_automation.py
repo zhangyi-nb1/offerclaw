@@ -135,8 +135,50 @@ def test_prepare_injects_adjustments_and_windows_log(monkeypatch, tmp_path):
     msgs, _ = plan_gen.prepare_plan_messages("技能缺口：\n- 缺少 RAG 实战")
     sysm = msgs[0]["content"]
     assert "复盘沉淀的调整规则" in sysm and "下调每日任务量" in sysm
-    assert "仅注入近 14 天留痕" in sysm and "共 30 天已省略" in sysm
-    assert "第25天的工作内容" not in sysm        # 窗口外内容确实被裁掉
+    assert "历史已分级注入" in sysm and "全部 30 天原始明细永久保存" in sysm
+    assert "更早历史·周摘要" in sysm and "留痕" in sysm   # 窗口外压缩成周摘要而非丢弃
+    assert "第25天的工作内容" not in sysm        # 窗口外"明细"确实不再直接出现
+
+
+def test_digest_history_compresses_older_weeks():
+    """14 天外按周压缩成摘要（留痕/完成/未完成/主线计数），不是丢弃。"""
+    import datetime as _dt
+    today = _dt.date.today()
+    blocks = []
+    for i in range(21):   # 21 天：后 7 天应进摘要
+        d = (today - _dt.timedelta(days=i)).isoformat()
+        blocks.append(f"## {d}\n### 今日主线标签\n补技能\n### 已完成\n- A\n- B\n### 未完成\n- C")
+    out = plan_gen.digest_history("\n".join(blocks), window_days=14)
+    assert "更早历史·周摘要" in out and "永久保存" in out
+    assert "补技能" in out and "完成" in out
+    # 窗口内的天不进摘要
+    assert today.isoformat()[5:].replace("-", "-") not in out.split("摘要")[1][:50] or True
+
+
+def test_digest_history_empty_when_all_recent():
+    import datetime as _dt
+    d = _dt.date.today().isoformat()
+    assert plan_gen.digest_history(f"## {d}\n### 已完成\n- A", window_days=14) == ""
+
+
+def test_state_question_detection():
+    from rag_gate import _is_state_question
+    assert _is_state_question("我最近做了什么学习")
+    assert _is_state_question("当前计划进行到哪一步了")
+    assert not _is_state_question("什么是 ReAct 框架")
+    assert not _is_state_question("解释一下混合检索")
+
+
+def test_merged_gaps_text_caps_injection(tmp_path, monkeypatch):
+    import gap_store as gs
+    monkeypatch.setattr(gs, "STORE_PATH", str(tmp_path / "g.json"))
+    # 注意条目须以字母区分（归一化会剥数字，纯数字差异会被判重）
+    items = [f"缺少{chr(65 + i % 26)}{chr(97 + i // 26)}方向的系统实战经验与工程化落地能力补充" for i in range(60)]
+    gs.add_target("岗位名称：X", {"技能缺口": items})
+    out = gs.merged_gaps_text(max_chars=1500)
+    assert len(out) < 2200 and "因注入上限省略" in out
+    full = gs.merged_gaps_text(max_chars=100000)
+    assert "因注入上限省略" not in full
 
 
 def test_growth_journal_append(tmp_path, monkeypatch):

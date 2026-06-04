@@ -534,6 +534,70 @@ def normalize_plan_dates(plan_md: str, start_iso: str = "") -> str:
     return plan_md
 
 
+def digest_history(full_log: str, today_iso: str = "", window_days: int = 14,
+                   max_weeks: int = 12) -> str:
+    """把窗口外的历史留痕**按周压缩成摘要**（确定性，不调 LLM、不需存储）。
+
+    信息分级而非丢弃：近 window_days 天给明细（调用方负责），更早的每周一行
+    （留痕天数/完成数/未完成数/主线分布），超过 max_weeks 的折叠成一行合计。
+    原始明细永久保存在 daily_log.md 与向量库，随时可查。
+    """
+    import re
+    import datetime
+
+    today = (datetime.date.fromisoformat(today_iso)
+             if today_iso else datetime.date.today())
+    cutoff = today - datetime.timedelta(days=window_days - 1)
+
+    # 切块：## YYYY-MM-DD … 到下一个日期头
+    blocks = re.split(r"(?=^## \d{4}-\d{2}-\d{2})", full_log, flags=re.M)
+    weeks: dict[tuple, dict] = {}
+    older_days = 0
+    for b in blocks:
+        m = re.match(r"^## (\d{4}-\d{2}-\d{2})", b)
+        if not m:
+            continue
+        try:
+            d = datetime.date.fromisoformat(m.group(1))
+        except ValueError:
+            continue
+        if d >= cutoff:
+            continue        # 窗口内明细由调用方注入，不进摘要
+        older_days += 1
+        key = d.isocalendar()[:2]   # (year, week)
+        w = weeks.setdefault(key, {"days": 0, "done": 0, "todo": 0,
+                                   "tags": {}, "start": d, "end": d})
+        w["days"] += 1
+        w["start"] = min(w["start"], d)
+        w["end"] = max(w["end"], d)
+        try:
+            from summary_tool import _parse_log_block
+            parsed = _parse_log_block(b, m.group(1))
+            w["done"] += len(parsed.get("completed") or [])
+            w["todo"] += len(parsed.get("incomplete") or [])
+            tag = (parsed.get("main_tag") or "").strip()
+            if tag:
+                w["tags"][tag] = w["tags"].get(tag, 0) + 1
+        except Exception:
+            pass
+
+    if not weeks:
+        return ""
+    ordered = sorted(weeks.items(), key=lambda kv: kv[0], reverse=True)  # 新→旧
+    lines = ["【更早历史·周摘要】（明细永久保存在 daily_log.md，可随时查阅）"]
+    for (y, wk), w in ordered[:max_weeks]:
+        tags = "、".join(f"{t}×{n}" for t, n in
+                        sorted(w["tags"].items(), key=lambda kv: -kv[1])[:2]) or "—"
+        lines.append(
+            f"- {y}-W{wk:02d}（{w['start'].strftime('%m-%d')}~{w['end'].strftime('%m-%d')}）："
+            f"留痕{w['days']}天 · 完成{w['done']}项 · 未完成{w['todo']}项 · 主线[{tags}]")
+    if len(ordered) > max_weeks:
+        rest = ordered[max_weeks:]
+        rest_days = sum(w["days"] for _k, w in rest)
+        lines.append(f"- 更早 {len(rest)} 周合计：留痕 {rest_days} 天（已折叠）")
+    return "\n".join(lines)
+
+
 def summarize_plan_changes(old_md: str, new_md: str) -> list[str]:
     """重排后输出"较上一版变化"的确定性摘要（不调 LLM）：周期 + 各周主题对比。"""
     import re
@@ -632,9 +696,12 @@ def prepare_plan_messages(gaps: str, revision_note: str = "",
         recent = extract_recent_blocks(daily_log_full, days=14)
         if recent and len(recent) < len(daily_log_full) - 200:
             total_days = len(re.findall(r"^## \d{4}-\d{2}-\d{2}", daily_log_full, re.M))
+            digest = digest_history(daily_log_full, window_days=14)
             daily_log = (
-                f"（仅注入近 14 天留痕；全部历史共 {total_days} 天已省略——"
-                "长期执行规律见『复盘沉淀的调整规则』）\n\n" + recent)
+                f"（历史已分级注入：近 14 天给明细、更早按周压缩成摘要；"
+                f"全部 {total_days} 天原始明细永久保存在 daily_log.md）\n\n"
+                + (digest + "\n\n" if digest else "")
+                + "【近 14 天明细】\n" + recent)
     except Exception:
         pass
 

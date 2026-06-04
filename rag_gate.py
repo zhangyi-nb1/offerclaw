@@ -53,6 +53,89 @@ def _thresholds() -> dict:
 RAG_SYNTH_MODEL = os.environ.get("RAG_SYNTH_MODEL", "qwen-turbo")
 
 FALLBACK_LABEL = "⚠️ 此问题知识库未直接覆盖，以下为通用知识回答（未经知识库验证，仅供参考）：\n\n"
+STATE_LABEL = "📂 来源：实时状态文件（画像/留痕/计划/投递，非策展知识库）：\n\n"
+
+# 个人状态类问题的特征词：命中则在知识库未覆盖时改用"实时文件"作答（双源问答）。
+# 解决"问答只看向量快照、答不了'我最近做了什么'"的断层——状态问题直接现读文件。
+_STATE_HINTS = ("我", "最近", "今天", "昨天", "本周", "上周", "进度", "留痕",
+                "投递", "计划", "缺口", "目标", "复盘", "做了什么", "学了什么",
+                "完成", "画像", "日志")
+
+
+def _is_state_question(question: str) -> bool:
+    """是否在问"用户自己的状态"（而非领域知识）——这类问题该看实时文件而非向量快照。"""
+    q = (question or "")
+    return any(h in q for h in _STATE_HINTS)
+
+
+def _live_state_block(max_chars: int = 3000) -> str:
+    """组装实时状态上下文（确定性现读文件，永不过期）。各段独立容错，整体限长。"""
+    import datetime
+    parts = [f"今天日期：{datetime.date.today().isoformat()}"]
+    try:  # 当前计划：周期/本周/今日任务
+        from plan_gen import summarize_plan_for_automation
+        s = summarize_plan_for_automation()
+        if s.get("has_plan"):
+            cw = s.get("current_week") or {}
+            seg = f"当前学习计划（{s.get('plan_file', '')}，周期 {s.get('period', '')}）"
+            if cw:
+                seg += f"：第{cw.get('n')}周 主题「{cw.get('theme', '')}」，本周交付：{cw.get('deliverable', '')}"
+            if s.get("today_tasks"):
+                seg += "；今日任务：" + "；".join(t[:50] for t in s["today_tasks"][:3])
+            parts.append(seg)
+    except Exception:
+        pass
+    try:  # 近 7 天留痕明细
+        from summary_tool import extract_recent_blocks
+        with open(os.path.join(BASE_DIR, "daily_log.md"), encoding="utf-8") as f:
+            recent = extract_recent_blocks(f.read(), days=7)
+        if recent:
+            parts.append("近 7 天留痕：\n" + recent[:1400])
+    except Exception:
+        pass
+    try:  # 投递池
+        from applications_store import list_applications
+        rows = list_applications()
+        if rows:
+            def _g(r, k):
+                return next((r[c] for c in r if k in c), "")
+            parts.append("投递池：" + "；".join(
+                f"{_g(r, '公司')}·{_g(r, '岗位')}（{_g(r, '状态')}，{_g(r, '日期')}）"
+                for r in rows[:6]))
+        else:
+            parts.append("投递池：暂无真实投递记录")
+    except Exception:
+        pass
+    try:  # 缺口库概览
+        from gap_store import summary as gap_summary
+        gs = gap_summary()
+        if gs.get("total_targets"):
+            cats = "、".join(f"{k}{v}条" for k, v in (gs.get("by_category") or {}).items())
+            parts.append(f"缺口库：目标 JD {gs['total_targets']} 个，缺口 {gs['merged_gap_count']} 条（{cats}）")
+    except Exception:
+        pass
+    try:  # 画像头部
+        with open(os.path.join(BASE_DIR, "user_profile.md"), encoding="utf-8") as f:
+            parts.append("画像摘录：\n" + f.read()[:700])
+    except Exception:
+        pass
+    return "\n\n".join(parts)[:max_chars]
+
+
+def _state_messages(question: str, live_block: str, weak_chunks: list) -> list:
+    bg = ""
+    if weak_chunks:
+        bg = ("\n\n知识库弱相关片段（未必准确，仅参考）：\n"
+              + "\n\n".join(f"[背景{i+1}]\n{c[:300]}" for i, c in enumerate(weak_chunks[:2])))
+    return [
+        {"role": "system", "content": (
+            "你是 OfferClaw 的个人状态问答助手。用户在问 ta 自己的状态/进展/计划/投递，"
+            "请**只依据下面的「实时状态」作答**（刚从用户状态文件现读，绝对最新）；"
+            "实时状态里没有的信息就直说没有记录，不要编造。回答简洁、分点。\n\n"
+            "========== 实时状态 ==========\n" + live_block + bg
+        )},
+        {"role": "user", "content": question},
+    ]
 
 
 def query_keywords(question: str) -> list:
@@ -194,13 +277,20 @@ def gated_query_stream(question: str, top_k: int = 5):
             return
 
         g = _retrieve_and_classify(question, top_k)
-        mode = "kb_grounded" if g["in_kb"] else "general_fallback"
+        state_path = (not g["in_kb"]) and _is_state_question(question)
+        mode = ("kb_grounded" if g["in_kb"]
+                else ("state_grounded" if state_path else "general_fallback"))
         yield {"type": "meta", "in_kb": g["in_kb"], "mode": mode,
-               "sources": g["sources"], "matched_by": g["matched_by"],
+               "sources": (g["sources"] if g["in_kb"] else
+                           (["实时状态文件"] if state_path else [])),
+               "matched_by": g["matched_by"] if g["in_kb"] else ("live_state" if state_path else None),
                "best_distance": round(g["best"], 4) if g["has_dists"] else None}
 
         if g["in_kb"]:
             msgs = _grounded_messages(question, g["chunks"])
+        elif state_path:
+            yield {"type": "delta", "text": STATE_LABEL}
+            msgs = _state_messages(question, _live_state_block(), g["chunks"])
         else:
             yield {"type": "delta", "text": FALLBACK_LABEL}
             msgs = _fallback_messages(question, g["chunks"])
@@ -294,6 +384,20 @@ def gated_query(question: str, top_k: int = 5) -> dict:
 
         # 未命中 → 兜底：弱相关片段（dist 在弱相关带内）+ 通用知识
         weak = [d for d, dist in zip(docs, dists) if dist <= th["weak"]]
+
+        # 双源问答：知识库未覆盖但问的是"用户自己的状态" → 现读实时文件作答（永不过期）
+        if _is_state_question(question):
+            live = _live_state_block()
+            ans = _chat(_state_messages(question, live, weak))
+            if ans:
+                return {
+                    "query": question, "in_kb": False, "mode": "state_grounded",
+                    "matched_by": "live_state", "answer": STATE_LABEL + ans,
+                    "sources": ["实时状态文件（user_profile/daily_log/plans/applications/gap_store）"],
+                    "best_distance": round(best, 4) if dists else None,
+                    "retrieval_count": 0,
+                }
+
         ans = synthesize_fallback_answer(question, weak)
         if ans is None:
             ans = "（无 LLM key，无法作答）"

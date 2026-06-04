@@ -194,17 +194,30 @@ def merged_gaps() -> dict[str, list[str]]:
     return out
 
 
-def merged_gaps_text() -> str:
-    """把缺口库导出成 plan_gen 可解析的文本（分类标题 + 条目行）。空库返回 ""。"""
+def merged_gaps_text(max_chars: int = 4000) -> str:
+    """把缺口库导出成 plan_gen 可解析的文本（分类标题 + 条目行）。空库返回 ""。
+
+    ``max_chars``：注入上限（用户长期累积大量目标 JD 时防上下文膨胀）——
+    超限时截断并注明省略条数；完整缺口永久保存在 gap_store.json。
+    """
     merged = merged_gaps()
     if not any(merged.values()):
         return ""
     lines: list[str] = []
     cats = [c for c in _CATEGORY_ORDER if merged.get(c)] + \
            [c for c in merged if c not in _CATEGORY_ORDER and merged.get(c)]
+    total = omitted = 0
     for cat in cats:
         lines.append(f"{cat}：")
-        lines.extend(f"- {it}" for it in merged[cat])
+        for it in merged[cat]:
+            entry = f"- {it}"
+            if total + len(entry) > max_chars:
+                omitted += 1
+                continue
+            lines.append(entry)
+            total += len(entry)
+    if omitted:
+        lines.append(f"（另有 {omitted} 条缺口因注入上限省略——完整清单见 gap_store.json）")
     return "\n".join(lines)
 
 
