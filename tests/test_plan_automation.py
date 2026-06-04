@@ -87,3 +87,30 @@ def test_prepare_plan_messages_evolves_from_prev_plan(monkeypatch):
     sys_msg = msgs[0]["content"]
     assert "用户当前计划（最新版" in sys_msg
     assert "基础上**演进**" in sys_msg
+
+
+def test_ensure_gap_metadata_tags_by_category():
+    """无标签缺口自动补 [致命度][短期性]，否则会被 plan_prompt 第 2 步拒绝生成。"""
+    out = plan_gen.ensure_gap_metadata(
+        "硬门槛缺口：\n- 需要 3 段实习经历\n"
+        "技能缺口：\n- 缺少 RAG 工程化实战\n"
+        "经历缺口：\n- 缺少端到端项目")
+    lines = out.splitlines()
+    assert "[致命度: 高] [短期性: 可补]" in lines[1]   # 硬门槛 → 高
+    assert "[致命度: 中] [短期性: 可补]" in lines[3]   # 技能 → 中
+    assert "[致命度: 中] [短期性: 可补]" in lines[5]   # 经历 → 中
+
+
+def test_ensure_gap_metadata_preserves_existing_tags():
+    src = "技能缺口：\n- 缺少 Agent 经历 [致命度: 高] [短期性: 不可补]"
+    out = plan_gen.ensure_gap_metadata(src)
+    assert out.count("致命度") == 1 and "[致命度: 高] [短期性: 不可补]" in out
+
+
+def test_prepare_plan_messages_gaps_are_tagged(monkeypatch):
+    """走 prepare 入口的缺口（CLI/Web 共用）必须已带元数据标签。"""
+    monkeypatch.setattr(plan_gen, "load_latest_plan", lambda: None)
+    monkeypatch.setattr(plan_gen, "retrieve_learning_resources", lambda *a, **k: [])
+    msgs, _ = plan_gen.prepare_plan_messages("技能缺口：\n- 缺少 RAG 实战打磨")
+    user_msg = msgs[1]["content"]
+    assert "缺少 RAG 实战打磨 [致命度: 中] [短期性: 可补]" in user_msg

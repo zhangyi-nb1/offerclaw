@@ -630,6 +630,10 @@ async def gen_plan(req: PlanRequest):
         plan_md = await loop.run_in_executor(
             None, lambda: call_llm_plain(messages, api_key, max_tokens=3500)
         )
+        # 退化产物（拒绝/无周结构）不落盘，避免污染"当前计划"
+        from plan_gen import is_degenerate_plan
+        if is_degenerate_plan(plan_md):
+            return PlanResponse(plan_md=plan_md, saved_path="")
         # 确定性追加参考资源附录，保证 API 路径也必含知识库引用
         plan_md = append_resources_appendix(plan_md, resources)
         path = save_plan(plan_md)
@@ -1169,10 +1173,16 @@ async def gen_plan_stream(req: PlanRequest):
                 for tok in call_llm_stream(messages, api_key, max_tokens=3500):
                     full_text.append(tok)
                     loop.call_soon_threadsafe(q.put_nowait, ("tok", tok))
+                raw = "".join(full_text)
+                # 退化产物（拒绝/无周结构）不落盘，避免污染"当前计划"被后续注入自我复制
+                from plan_gen import is_degenerate_plan
+                if is_degenerate_plan(raw):
+                    loop.call_soon_threadsafe(q.put_nowait, ("done", ""))
+                    return
                 # 流结束后：确定性追加参考资源附录，再落盘
-                plan_md = append_resources_appendix("".join(full_text), resources)
+                plan_md = append_resources_appendix(raw, resources)
                 # 把附录部分也作为最后一段 token 推给前端
-                appendix = plan_md[len("".join(full_text)):]
+                appendix = plan_md[len(raw):]
                 if appendix:
                     loop.call_soon_threadsafe(q.put_nowait, ("tok", appendix))
                 path = save_plan(plan_md)

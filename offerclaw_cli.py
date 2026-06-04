@@ -106,6 +106,15 @@ def cmd_plan(gaps=None):
         return
     messages, resources = prepare_plan_messages(gaps)
     plan = call_llm_plain(messages, api_key, max_tokens=3500)
+    # 退化产物（拒绝/无周结构）不落盘：避免污染"当前计划"并被后续注入自我复制
+    from plan_gen import is_degenerate_plan
+    if is_degenerate_plan(plan):
+        _json_out({
+            "status": "error",
+            "error": "生成结果不是有效计划（无周结构/被拒绝），未保存。请重试或检查缺口输入。",
+            "full_plan": plan,
+        })
+        return
     plan = append_resources_appendix(plan, resources)
     path = save_plan(plan)
     themes = _extract_weekly_themes(plan)

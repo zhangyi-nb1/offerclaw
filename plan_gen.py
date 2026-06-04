@@ -434,6 +434,55 @@ def _resolve_chat_config(api_key: str) -> dict:
     return {**cfg, "bearer": bearer}
 
 
+def is_degenerate_plan(content: str) -> bool:
+    """判定一份"计划"是否是退化产物（LLM 拒绝/报错文本，而非真计划）。
+
+    特征：含输入检查拒绝话术，或没有任何 Week N 主题 周结构。
+    退化产物不应作为 prev_plan 注入（会让 LLM 照着拒绝文案自我复制），
+    也不应落盘成"当前计划"。
+    """
+    import re
+    c = content or ""
+    if "依赖文件检查未通过" in c or "无法执行路线规划" in c:
+        return True
+    return not re.search(r"Week\s*\d+[^\n]*主题", c)
+
+
+def ensure_gap_metadata(gaps: str) -> str:
+    """给缺口条目自动补齐 plan_prompt 第 2 步要求的元数据标签。
+
+    match / 缺口库 / 画像默认 产出的缺口都是纯文本，不带
+    ``[致命度: ...] [短期性: ...]``，会被 plan_prompt 的输入检查拒绝。
+    这里按所属分类补默认值（确定性，不调 LLM）：
+      硬门槛缺口 → [致命度: 高]；技能/经历缺口 → [致命度: 中]；其他 → [致命度: 低]；
+      短期性统一默认 [短期性: 可补]（不可补的硬门槛本就无法靠 4 周计划解决）。
+    已带标签的条目原样保留。
+    """
+    import re
+    cat_level = {"硬门槛": "高", "技能": "中", "经历": "中"}
+    level = "中"
+    out: list[str] = []
+    for ln in gaps.splitlines():
+        s = ln.strip()
+        # 分类标题行：更新当前默认致命度
+        header = re.sub(r"[\s:：\[\]【】]+", "", s)
+        if header.endswith("缺口") and len(header) <= 8:
+            for key, lv in cat_level.items():
+                if key in header:
+                    level = lv
+                    break
+            else:
+                level = "低"
+            out.append(ln)
+            continue
+        # 条目行（- / * / 数字开头）且未带标签 → 行内补默认元数据
+        if re.match(r"^\s*[-*\d]", ln) and "致命度" not in ln:
+            out.append(f"{ln.rstrip()} [致命度: {level}] [短期性: 可补]")
+        else:
+            out.append(ln)
+    return "\n".join(out)
+
+
 def prepare_plan_messages(gaps: str) -> tuple[list, list[dict]]:
     """读依赖文件 + RAG 检索资源 + 组装 messages 的统一入口。
 
@@ -448,15 +497,19 @@ def prepare_plan_messages(gaps: str) -> tuple[list, list[dict]]:
     source_policy = read_text(SOURCE_POLICY_PATH)
     target_rules = read_text(TARGET_RULES_PATH)
 
+    # 自动补齐元数据标签，避免被 plan_prompt 第 2 步输入检查拒绝
+    gaps = ensure_gap_metadata(gaps)
+
     direction = _extract_direction(profile)
     resources = retrieve_learning_resources(gaps, direction=direction)
     resources_block = format_resources_block(resources)
     project_context = load_project_context()
 
-    # 再规划以"最新计划（含用户手动调整）"为基础演进；截断以控制上下文体积
+    # 再规划以"最新计划（含用户手动调整）"为基础演进；截断以控制上下文体积。
+    # 退化产物（拒绝文案/无周结构）绝不注入——否则 LLM 会照着它自我复制拒绝。
     prev_plan = ""
     latest = load_latest_plan()
-    if latest and latest.get("content"):
+    if latest and latest.get("content") and not is_degenerate_plan(latest["content"]):
         prev_plan = latest["content"][:4000]
 
     messages = build_messages(
