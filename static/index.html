@@ -524,6 +524,10 @@
     max-height: 260px;
     line-height: 1.65;
   }
+  /* 生成内容框：点击整框展开全显，再点收起（除滚动外的快捷查看方式） */
+  .card-body.expanded, .pv-snippet.expanded { max-height: none !important; }
+  .card-body.can-expand, .pv-snippet.can-expand { cursor: zoom-in; }
+  .card-body.expanded, .pv-snippet.expanded { cursor: zoom-out; }
   .card-body pre {
     background: var(--surface-2);
     border-radius: var(--radius-sm);
@@ -2167,6 +2171,32 @@ async function buildResumeProject(withJD){
     setStatus('resumeStatus', 'err', '失败');
   }
 }
+
+// ===== 生成内容框：点击展开全显 / 再点收起 =====
+function _overflowing(el){
+  return el.classList.contains('expanded') || (el.scrollHeight - el.clientHeight > 8);
+}
+document.addEventListener('click', e => {
+  const box = e.target.closest('.card-body, .pv-snippet');
+  if (!box) return;
+  // 点的是按钮/链接/输入控件 → 不抢交互
+  if (e.target.closest('button, a, input, textarea, select, label')) return;
+  // 用户正在选中复制文字 → 不触发
+  const sel = window.getSelection();
+  if (sel && sel.toString()) return;
+  if (!_overflowing(box)) return;   // 内容没溢出就不用展开
+  box.classList.toggle('expanded');
+  box.classList.toggle('can-expand', !box.classList.contains('expanded'));
+});
+document.addEventListener('mouseover', e => {
+  const box = e.target.closest('.card-body, .pv-snippet');
+  if (!box || box.dataset.expandHint) return;
+  if (_overflowing(box)) {
+    box.dataset.expandHint = '1';
+    box.classList.add('can-expand');
+    if (!box.title) box.title = '点击展开全部内容，再次点击收起';
+  }
+});
 
 // ===== Boot =====
 document.getElementById('jdInput')?.addEventListener('input', updateJDFlowState);
