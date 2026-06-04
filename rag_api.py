@@ -296,6 +296,7 @@ class TodayResponse(BaseModel):
     adjustments: list[str] = []  # P2：复盘沉淀的次日调整规则
     plan: dict = {}              # 当前学习计划的本周重点（自动化引用的最新计划）
     today_plan: list[str] = []   # 今日对照清单（每日执行卡对照 + 未完成自动判定基准）
+    plan_drift: dict = {}        # 计划偏离评估（none/info/warn）：计划只在用户主动重排时改变
     stats: dict = {}
 
 

@@ -1812,9 +1812,21 @@ async function loadToday(){
     const dailyPlanList = document.getElementById('dailyPlanList');
     if (dailyPlanList) {
       const tp = d.today_plan || [];
-      dailyPlanList.innerHTML = tp.length
+      let html = tp.length
         ? tp.map(t => `· ${escapeHtml(t)}`).join('<br>')
         : '（暂无计划项：先生成一份学习计划，这里会给出今天该做什么）';
+      // 计划偏离建议：复盘只记录事实，计划不会自动改——在这里明确告诉用户该不该重排
+      const drift = d.plan_drift || {};
+      if (drift.level && drift.level !== 'none') {
+        const color = drift.level === 'warn' ? 'var(--warning)' : 'var(--text-muted)';
+        const icon = drift.level === 'warn' ? '⚠️' : '💡';
+        html += `<div style="margin-top:8px;padding:8px 10px;border:1px dashed ${color};border-radius:var(--radius);color:${color};font-size:12px">
+          ${icon} ${escapeHtml(drift.message||'')}
+          ${(drift.evidence||[]).map(e=>`<br>· ${escapeHtml(e)}`).join('')}
+          <br><button class="btn secondary" style="margin-top:6px;padding:3px 10px" onclick="doPlan()">按实际进度重排计划</button>
+        </div>`;
+      }
+      dailyPlanList.innerHTML = html;
     }
     document.getElementById('metricToday').textContent = d.today || '—';
     document.getElementById('metricTodayHint').textContent = d.source || '今日建议';

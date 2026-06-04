@@ -99,6 +99,49 @@ def test_normalize_plan_dates_fixes_llm_date_drift():
     assert "计划周期：2026-06-05 → 2026-06-09" in out
 
 
+def _write_log(tmp_path, blocks: dict) -> str:
+    md = "\n".join(
+        f"## {d}\n### 已完成\n- 做了点别的\n### 未完成\n" + "\n".join(f"- {t}" for t in todos)
+        for d, todos in blocks.items())
+    p = tmp_path / "daily_log.md"
+    p.write_text(md, encoding="utf-8")
+    return str(p)
+
+
+def test_plan_drift_info_on_single_day_miss(tmp_path, monkeypatch):
+    import career_agent
+    monkeypatch.setattr(career_agent, "DAILY_LOG_PATH",
+                        _write_log(tmp_path, {"2026-06-08": ["完成 RAG 流程图"]}))
+    monkeypatch.setattr(career_agent, "_load_active_adjustments", lambda: [])
+    drift = career_agent._assess_plan_drift("2026-06-09", {"has_plan": True, "expired": False})
+    assert drift["level"] == "info" and "昨日有 1 项" in drift["message"]
+    assert "生成计划" in drift["message"]          # 明确告诉用户怎么做
+
+
+def test_plan_drift_warn_on_multi_day_miss(tmp_path, monkeypatch):
+    import career_agent
+    monkeypatch.setattr(career_agent, "DAILY_LOG_PATH", _write_log(tmp_path, {
+        "2026-06-07": ["任务A", "任务B"], "2026-06-08": ["任务C"]}))
+    monkeypatch.setattr(career_agent, "_load_active_adjustments", lambda: [])
+    drift = career_agent._assess_plan_drift("2026-06-09", {"has_plan": True, "expired": False})
+    assert drift["level"] == "warn" and "明显偏离" in drift["message"]
+    assert len(drift["evidence"]) == 2
+
+
+def test_plan_drift_none_without_miss_or_plan(tmp_path, monkeypatch):
+    import career_agent
+    monkeypatch.setattr(career_agent, "DAILY_LOG_PATH",
+                        _write_log(tmp_path, {"2026-06-08": []}))
+    monkeypatch.setattr(career_agent, "_load_active_adjustments", lambda: [])
+    assert career_agent._assess_plan_drift(
+        "2026-06-09", {"has_plan": True, "expired": False})["level"] == "none"
+    # 计划过期时不提示重排（today 已另有"重新生成"提示）
+    monkeypatch.setattr(career_agent, "DAILY_LOG_PATH",
+                        _write_log(tmp_path, {"2026-06-08": ["任务A"]}))
+    assert career_agent._assess_plan_drift(
+        "2026-06-09", {"has_plan": True, "expired": True})["level"] == "none"
+
+
 def test_normalize_plan_dates_noop_without_day_labels():
     src = "计划周期：2026-06-05 → 2026-06-30\n没有日计划层的文本"
     assert plan_gen.normalize_plan_dates(src, "2026-06-05") == src

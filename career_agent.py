@@ -132,6 +132,52 @@ def _load_current_plan_focus(today_iso: str) -> dict:
         return {"has_plan": False}
 
 
+def _assess_plan_drift(today_iso: str, plan: dict) -> dict:
+    """对照 daily_log 近 3 天的未完成记录，判断计划与实际进度的偏离程度。
+
+    设计：计划本体**只在用户主动重排（生成/LLM 修改/编辑）时改变**——复盘不会
+    悄悄改计划。本函数负责把"该不该重排"明确告诉用户：
+      none：无偏离，不打扰；
+      info：昨日有少量未完成 → 温和提示，可顺其自然也可重排；
+      warn：连续多天/累计较多未完成（或复盘已沉淀调整规则）→ 明确建议重排。
+    重排时「完成度感知」会跳过已完成、顺延未完成，所以建议是安全的。
+    """
+    out = {"level": "none", "message": "", "evidence": []}
+    try:
+        if not plan.get("has_plan") or plan.get("expired"):
+            return out
+        from summary_tool import extract_date_block, _parse_log_block
+        today = datetime.date.fromisoformat(today_iso)
+        log_md = _read(DAILY_LOG_PATH)
+        days_with_miss, total_miss, evidence = 0, 0, []
+        for i in range(1, 4):   # 回看最近 3 天（不含今天）
+            d = (today - datetime.timedelta(days=i)).isoformat()
+            block = extract_date_block(log_md, d)
+            if not block:
+                continue
+            inc = (_parse_log_block(block, d).get("incomplete") or [])
+            if inc:
+                days_with_miss += 1
+                total_miss += len(inc)
+                evidence.append(f"{d} 未完成 {len(inc)} 项（如：{str(inc[0])[:24]}…）")
+        if total_miss == 0:
+            return out
+        strong = days_with_miss >= 2 or total_miss >= 3 or bool(_load_active_adjustments())
+        out["level"] = "warn" if strong else "info"
+        out["evidence"] = evidence
+        if strong:
+            out["message"] = (
+                f"近 {days_with_miss} 天累计 {total_miss} 项任务未完成，计划排期与实际进度已明显偏离。"
+                "建议点「生成计划」按实际进度重排：已完成的不会重复排，未完成的会顺延进剩余天数。")
+        else:
+            out["message"] = (
+                f"昨日有 {total_miss} 项任务未完成。计划不会自动改动——影响不大可顺其自然；"
+                "若想把它们正式排回日程，点「生成计划」即可按实际进度重排。")
+        return out
+    except Exception:
+        return out
+
+
 def get_today_advice() -> Dict[str, object]:
     """生成"今天最该做什么"。返回结构供 /api/today 直接 JSON 化。"""
     apps_md = _read(APPLICATIONS_PATH)
@@ -226,6 +272,7 @@ def get_today_advice() -> Dict[str, object]:
         "adjustments": adjustments,
         "plan": plan,
         "today_plan": today_plan,
+        "plan_drift": _assess_plan_drift(today, plan),
         "stats": {
             "applications_total": len(rows),
             "last_log_date": last_log or "",
