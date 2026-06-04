@@ -523,7 +523,13 @@
     overflow: auto;
     max-height: 260px;
     line-height: 1.65;
+    /* 防布局撑爆：超长不可断字符串（如报错里的长 URL）强制换行，
+       否则会把文档撑宽、配合 body overflow-x:hidden 造成"页面卡死无法拖动" */
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    min-width: 0;
   }
+  .card { min-width: 0; }   /* 网格项允许收缩，内容过宽不外溢出轨道 */
   /* 生成内容框：点击整框展开全显，再点收起（除滚动外的快捷查看方式） */
   .card-body.expanded, .pv-snippet.expanded { max-height: none !important; }
   .card-body.can-expand, .pv-snippet.can-expand { cursor: zoom-in; }
