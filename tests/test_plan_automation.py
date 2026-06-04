@@ -84,19 +84,19 @@ def test_today_advice_prefers_day_tasks(monkeypatch):
 
 
 def test_normalize_plan_dates_fixes_llm_date_drift():
-    """LLM 连排日期会错标/重复（如 D5 标成 06-05）→ 按 开始日期+序号 确定性重写。"""
+    """LLM 连排日期会错标/重复（真实 bug：第 5 块标成 06-05）→ 按 开始日期+序号 重写。"""
+    days = "".join(
+        f"D{i}（06-0{4+i} 周四）\n  核心任务：\n    1. 任务{i}（预计 2h）\n" for i in (1, 2, 3, 4))
+    days += "D5（06-05 周五）\n  核心任务：\n    1. 任务5（预计 2h）\n"   # 第 5 块错标回 06-05
     bad = ("计划周期：2026-06-05 → 2026-06-30\n"
-           "Week 1 (06-03 → 06-09) 主题：A\n"
-           "Week 2 (06-12 → 06-18) 主题：B\n"
-           "D1（06-05 周四）\n  核心任务：\n    1. 任务甲（预计 3h）\n"
-           "D5（06-05 周五）\n  核心任务：\n    1. 任务乙（预计 2h）\n")   # D5 错标成 06-05
+           "Week 1 (06-03 → 06-09) 主题：A\n" + days)
     out = plan_gen.normalize_plan_dates(bad, "2026-06-05")
     assert "D1（06-05 周五）" in out          # 2026-06-05 实为周五，星期也被纠正
-    assert "D5（06-09 周二）" in out          # D5 = start+4
+    assert "D5（06-09 周二）" in out          # 第 5 块 = start+4，错标被纠正
     assert out.count("06-05 周") == 1        # 日期不再重复
     # 周界与周期按 5 天总量重算
-    assert "Week 1 (06-05 → 06-11)" in out
-    assert "计划周期：2026-06-05 → 2026-06-09" in out  # 只有 5 个日标签 → 周期 5 天
+    assert "Week 1 (06-05 → 06-09)" in out
+    assert "计划周期：2026-06-05 → 2026-06-09" in out
 
 
 def test_normalize_plan_dates_noop_without_day_labels():
