@@ -218,6 +218,13 @@ class KBPromoteRequest(BaseModel):
     to_subdir: str        # career_paths / experience_posts / learning_resources
 
 
+class GapTargetRequest(BaseModel):
+    jd_text: str = ""
+    gaps: dict = {}       # match 产出的 {分类: [条目...]}
+    title: str = ""
+    company: str = ""
+
+
 class DailyResponse(BaseModel):
     today_log: str = ""
     recent_summary: str = ""
@@ -258,6 +265,7 @@ class TodayResponse(BaseModel):
     next_actions: list[str] = []
     adjustments: list[str] = []  # P2：复盘沉淀的次日调整规则
     plan: dict = {}              # 当前学习计划的本周重点（自动化引用的最新计划）
+    today_plan: list[str] = []   # 今日对照清单（每日执行卡对照 + 未完成自动判定基准）
     stats: dict = {}
 
 
@@ -615,7 +623,7 @@ async def gen_plan(req: PlanRequest):
         api_key, api_key_env = _active_llm_api_key()
         if not api_key:
             raise HTTPException(status_code=500, detail=f"{api_key_env} 未配置")
-        gaps = (req.gaps or "").strip() or "（前端未提供缺口清单，按用户画像通用方向规划）"
+        gaps = _resolve_plan_gaps(req.gaps)
         # 统一入口：读依赖 + RAG 检索资源 + 组装 messages（与 CLI 一致）
         messages, resources = prepare_plan_messages(gaps)
         loop = asyncio.get_event_loop()
@@ -683,6 +691,59 @@ async def save_edited_plan(req: PlanSaveRequest):
         raise HTTPException(status_code=500, detail=f"保存计划失败: {str(e)}")
 
 
+def _resolve_plan_gaps(req_gaps: str) -> str:
+    """计划生成的缺口来源（按优先级）：显式入参 > 缺口信息库（累积的目标 JD 缺口）>
+    画像通用方向。计划永远基于「画像 + 知识库 + 缺口库」三件套，与单次匹配解耦。"""
+    g = (req_gaps or "").strip()
+    if g:
+        return g
+    try:
+        from gap_store import merged_gaps_text
+        stored = merged_gaps_text()
+        if stored:
+            return stored
+    except Exception:
+        _log.warning("read gap_store failed", exc_info=True)
+    return "（缺口库为空，按用户画像通用方向规划）"
+
+
+@app.post("/api/gaps/target")
+async def set_gap_target(req: GapTargetRequest):
+    """把一个 JD 设为目标：JD 摘要 + 缺口持久入缺口库（跨 JD 合并去重）。
+    此后所有计划（重新）生成都以累积缺口库为背景。"""
+    try:
+        from gap_store import add_target
+        out = add_target(req.jd_text, req.gaps, title=req.title, company=req.company)
+        if out.get("status") != "ok":
+            raise HTTPException(status_code=400, detail=out.get("error", "入库失败"))
+        return out
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log.exception("set_gap_target failed")
+        raise HTTPException(status_code=500, detail=f"目标入库失败: {str(e)}")
+
+
+@app.get("/api/gaps")
+async def get_gaps():
+    """缺口信息库概览：目标 JD 列表 + 合并后的缺口 + 可直接喂计划的文本。"""
+    try:
+        from gap_store import list_targets, merged_gaps, merged_gaps_text, summary
+        return {
+            "status": "ok",
+            **summary(),
+            "targets": [
+                {k: t.get(k) for k in ("id", "added_at", "title", "company", "raw_gap_count")}
+                for t in list_targets()
+            ],
+            "merged": merged_gaps(),
+            "merged_text": merged_gaps_text(),
+        }
+    except Exception as e:
+        _log.exception("get_gaps failed")
+        raise HTTPException(status_code=500, detail=f"读取缺口库失败: {str(e)}")
+
+
 @app.post("/api/daily/log")
 async def append_daily_structured(req: DailyLogStructuredRequest):
     """结构化留痕（Web 表单专用）：主线/已完成/未完成/笔记 → daily_log.md。
@@ -690,12 +751,24 @@ async def append_daily_structured(req: DailyLogStructuredRequest):
     与 CLI cmd_log、晚间复盘 _parse_log_block 走同一写入器，格式统一可解析。
     """
     try:
-        from summary_tool import append_structured_daily_log
+        from summary_tool import append_structured_daily_log, analyze_incomplete
         if not (req.done or req.todo or req.notes.strip() or req.tag.strip()):
             raise HTTPException(status_code=400, detail="留痕内容不能全空")
+        # 未完成不由用户填写：对照 OfferClaw 今日计划自动判定（系统分析生成）
+        planned: list = []
+        try:
+            from career_agent import get_today_advice
+            planned = get_today_advice().get("today_plan", [])
+        except Exception:
+            _log.warning("load today_plan failed", exc_info=True)
+        auto_todo = analyze_incomplete(req.done, planned)
+        # 兼容外部调用方显式传入的 todo（如微信留痕），合并去重
+        final_todo = auto_todo + [t for t in (req.todo or []) if t and t not in auto_todo]
         result = append_structured_daily_log(
-            tag=req.tag.strip(), done=req.done, todo=req.todo, notes=req.notes,
+            tag=req.tag.strip(), done=req.done, todo=final_todo, notes=req.notes,
         )
+        result["today_plan"] = planned
+        result["auto_incomplete"] = auto_todo
         return result
     except HTTPException:
         raise
@@ -1082,7 +1155,7 @@ async def gen_plan_stream(req: PlanRequest):
         prepare_plan_messages, call_llm_stream, save_plan,
         append_resources_appendix,
     )
-    gaps = (req.gaps or "").strip() or "（前端未提供缺口清单，按用户画像通用方向规划）"
+    gaps = _resolve_plan_gaps(req.gaps)
     # 统一入口：读依赖 + RAG 检索资源 + 组装 messages（与 CLI / 非流式一致）
     messages, resources = prepare_plan_messages(gaps)
 

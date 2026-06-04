@@ -185,6 +185,16 @@ def get_today_advice() -> Dict[str, object]:
             line = "【当前计划已到期，建议重新生成】" + line
         next_actions.insert(0, line + edited)
 
+    # 2.7) 今日对照清单（today_plan）：OfferClaw 给出的"今天该做的"，
+    #      供每日执行卡对照执行 + 留痕提交后自动判定未完成。
+    today_plan: List[str] = []
+    if cw:
+        today_plan.append(f"推进本周主线（第{cw['n']}周）：{cw['theme']}")
+        if cw.get("deliverable"):
+            today_plan.append(f"向本周交付推进：{cw['deliverable']}")
+    if headline and source == "applications.md":
+        today_plan.append(headline)
+
     # 3) 兜底建议
     if not headline:
         if cw and not plan.get("expired"):
@@ -210,6 +220,7 @@ def get_today_advice() -> Dict[str, object]:
         "next_actions": next_actions,
         "adjustments": adjustments,
         "plan": plan,
+        "today_plan": today_plan,
         "stats": {
             "applications_total": len(rows),
             "last_log_date": last_log or "",

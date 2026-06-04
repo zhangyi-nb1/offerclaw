@@ -91,7 +91,15 @@ def cmd_plan(gaps=None):
     full_plan 已落盘到 plans/。
     """
     from plan_gen import prepare_plan_messages, call_llm_plain, append_resources_appendix, save_plan
-    gaps = (gaps or "").strip() or _default_gaps_from_profile()
+    # 缺口来源优先级：显式入参 > 缺口信息库（累积的目标 JD 缺口）> 画像默认
+    gaps = (gaps or "").strip()
+    if not gaps:
+        try:
+            from gap_store import merged_gaps_text
+            gaps = merged_gaps_text()
+        except Exception:
+            gaps = ""
+    gaps = gaps or _default_gaps_from_profile()
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         _json_out({"status": "error", "error": "未配置 OPENAI_API_KEY"})
@@ -191,6 +199,23 @@ def cmd_review(date_str=None):
     import datetime
     import subprocess
     date_str = date_str or datetime.date.today().isoformat()
+    # 用户当日未留痕 → 自动按"今日计划全部未完成"记一条（长期养成：状态不留白），再复盘
+    auto_logged = False
+    try:
+        log_md = open(os.path.join(BASE_DIR, "daily_log.md"), encoding="utf-8").read() \
+            if os.path.exists(os.path.join(BASE_DIR, "daily_log.md")) else ""
+        if f"## {date_str}" not in log_md:
+            from career_agent import get_today_advice
+            from summary_tool import append_structured_daily_log
+            planned = get_today_advice().get("today_plan", [])
+            append_structured_daily_log(
+                tag="", done=[], todo=planned,
+                notes="（系统自动：用户当日未留痕，按今日计划记为未完成）",
+                date_str=date_str,
+            )
+            auto_logged = True
+    except Exception:
+        pass
     try:
         proc = subprocess.run(
             [os.path.join(BASE_DIR, ".venv/bin/python"), "summary_tool.py", "--date", date_str],
@@ -212,6 +237,7 @@ def cmd_review(date_str=None):
             "date": date_str,
             "saved": saved.replace("[OK] ", "").strip(),
             "active_adjustments": active,
+            "auto_logged": auto_logged,  # True=用户当日未留痕，系统已按今日计划记为未完成
         })
     except Exception as e:
         _json_out({"status": "error", "error": str(e), "date": date_str})

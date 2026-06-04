@@ -988,14 +988,14 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </div>
             <div class="card-title-block">
-              <div class="card-title">学习计划（OfferClaw 据 RAG + 画像生成）</div>
-              <div class="card-subtitle">可查看 · 可编辑 · 编辑后 OfferClaw 会知晓</div>
+              <div class="card-title">学习计划（画像 + 知识库 + 缺口库 三件套生成）</div>
+              <div class="card-subtitle">可编辑，编辑后所有自动化跟随 · <span id="planGapMeta">🎯 缺口库加载中…</span></div>
             </div>
             <span class="status-dot" id="planStatus">加载中</span>
           </div>
           <div class="card-actions" id="planActionsView" style="margin-top:0; margin-bottom:12px">
-            <button class="btn" onclick="doPlan(false)">基于 ③ 缺口生成</button>
-            <button class="btn secondary" onclick="doPlan(true)">通用方向</button>
+            <button class="btn" onclick="doPlan(false)" title="把 ③ 的 JD 设为目标（缺口持久入库），再基于累积缺口库生成">设为目标并生成</button>
+            <button class="btn secondary" onclick="doPlan(true)" title="不新增目标，基于现有 画像+知识库+缺口库 重新生成">重新生成</button>
             <button class="btn secondary" id="planEditBtn" onclick="enterPlanEdit()" style="display:none">编辑计划</button>
           </div>
           <div class="card-actions" id="planActionsEdit" style="margin-top:0; margin-bottom:12px; display:none">
@@ -1020,6 +1020,10 @@
             </div>
             <span class="status-dot" id="dailyStatus">未加载</span>
           </div>
+          <div class="kb-preview" id="dailyPlanBox" style="margin:0 0 10px 0">
+            <div class="pv-title" style="font-size:12.5px">📋 OfferClaw 今日计划（对照执行）</div>
+            <div id="dailyPlanList" style="font-size:12.5px;color:var(--text-muted);margin-top:4px">加载中…</div>
+          </div>
           <select class="input" id="dailyTag" style="margin-bottom:8px">
             <option value="">今日主线标签（可选）…</option>
             <option value="补技能">补技能</option>
@@ -1028,8 +1032,8 @@
             <option value="岗位调研">岗位调研</option>
             <option value="投递准备">投递准备</option>
           </select>
-          <textarea class="textarea" id="dailyDone" placeholder="已完成（每行一项）：例\n看完 RAG 全链路\n写了分块去重代码"></textarea>
-          <textarea class="textarea" id="dailyTodo" placeholder="系统识别的未完成/偏离；这里仅补充遗漏项（可空）" style="margin-top:8px;min-height:48px"></textarea>
+          <textarea class="textarea" id="dailyDone" placeholder="今天实际做了什么（每行一项）：例\n看完 RAG 全链路\n写了分块去重代码"></textarea>
+          <div id="dailyAutoTodo" style="display:none;margin-top:8px;padding:10px 12px;border:1px dashed var(--warning);border-radius:var(--radius);font-size:12.5px"></div>
           <textarea class="textarea" id="dailyNotes" placeholder="学习留痕：笔记、链接、PDF/图片说明（可空）" style="margin-top:8px;min-height:48px"></textarea>
           <div class="file-row">
             <label class="file-label" for="dailyFiles">
@@ -1130,6 +1134,7 @@ const SAMPLE_JD = `岗位名称：大模型应用开发实习生
 工作性质：驻场`;
 
 let LAST_GAPS_TEXT = "";
+let LAST_GAPS_DICT = null;   // ③ 卡最近一次匹配的结构化缺口（设为目标用）
 
 // ===== Theme toggle =====
 const themeToggle = document.getElementById('themeToggle');
@@ -1278,6 +1283,7 @@ async function doMatch(){
 
 function renderGaps(gapList, suggestions){
   const body = document.getElementById('gapBody');
+  LAST_GAPS_DICT = gapList || {};   // 结构化缺口：供「设为目标→入缺口库」
   let html = '', total = 0, plain = '';
   for (const [cat, items] of Object.entries(gapList)) {
     if (!items || !items.length) continue;
@@ -1308,9 +1314,35 @@ function renderGaps(gapList, suggestions){
 // ===== Plan (SSE) =====
 async function doPlan(useGeneric){
   const body = document.getElementById('planBody');
-  const gaps = useGeneric ? '' : LAST_GAPS_TEXT;
-  if (!useGeneric && !gaps) {
-    if (!confirm('③ 缺口卡片还没数据，要不要按"通用方向"生成？')) return;
+  let gaps = '';   // 留空 → 后端自动用缺口库（画像+知识库+缺口库 三件套）
+  if (!useGeneric) {
+    if (LAST_GAPS_DICT && Object.values(LAST_GAPS_DICT).some(v => v && v.length)) {
+      // ③ 有新匹配的缺口：先把该 JD 设为目标（JD+缺口持久入缺口库），计划基于累积库生成
+      try {
+        const jdText = (document.getElementById('jdInput')?.value || '').trim();
+        const r0 = await fetch('/api/gaps/target', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({jd_text: jdText, gaps: LAST_GAPS_DICT})
+        });
+        const t = await r0.json();
+        if (r0.ok) {
+          showToast(`🎯 已设为目标：${t.title||'该 JD'}（新缺口 +${t.added_gaps} · 重复 ${t.duplicate_gaps} · 库内共 ${t.merged_gap_count}）`);
+          loadGapSummary();
+        } else {
+          showToast('目标入库失败：' + (t.detail || r0.status) + '，将直接用现有缺口库生成');
+        }
+      } catch (e) {
+        showToast('目标入库异常：' + e.message);
+      }
+    } else {
+      // ③ 没有新缺口：直接基于已累积的缺口库生成；库也为空才询问通用方向
+      const gs = await fetch('/api/gaps').then(r=>r.json()).catch(()=>null);
+      if (!gs || !gs.merged_gap_count) {
+        if (!confirm('缺口库为空且 ③ 没有新缺口，按"通用方向"生成？')) return;
+      } else {
+        showToast(`基于缺口库生成（目标 JD ${gs.total_targets} 个 · 缺口 ${gs.merged_gap_count} 条）`);
+      }
+    }
   }
   body.innerHTML = '<pre id="planStream" class="cursor"></pre>';
   const streamEl = document.getElementById('planStream');
@@ -1385,6 +1417,17 @@ function renderMarkdown(md){
   }
   closeList();
   return html;
+}
+
+async function loadGapSummary(){
+  const el = document.getElementById('planGapMeta');
+  if (!el) return;
+  try {
+    const d = await fetch('/api/gaps').then(r=>r.json());
+    const last = d.latest_target ? ` · 最近目标：${d.latest_target.title}` : '';
+    el.textContent = `🎯 目标 JD ${d.total_targets} 个 · 缺口库 ${d.merged_gap_count} 条${last}`;
+    el.title = d.merged_text || '缺口库为空：在 ② 跑一次匹配后点「设为目标并生成」';
+  } catch (e) { el.textContent = '🎯 缺口库读取失败'; }
 }
 
 async function loadCurrentPlan(){
@@ -1532,10 +1575,9 @@ async function uploadDailyAttachments(files){
 async function appendStructuredDaily(){
   const tag = document.getElementById('dailyTag').value;
   const done = _lines('dailyDone');
-  const todo = _lines('dailyTodo');
   const notes = (document.getElementById('dailyNotes').value || '').trim();
   const files = selectedDailyFiles();
-  if (!tag && !done.length && !todo.length && !notes && !files.length) {
+  if (!tag && !done.length && !notes && !files.length) {
     showToast('请至少填一项'); return;
   }
   setStatus('dailyStatus', 'run', '写入中');
@@ -1546,19 +1588,29 @@ async function appendStructuredDaily(){
       ? '附件\n' + uploaded.map(f => `- [${f.name}](${f.url})`).join('\n')
       : '';
     const finalNotes = [notes, attachmentNotes].filter(Boolean).join('\n\n');
+    // 未完成不由用户填：提交后由 OfferClaw 对照"今日计划"自动判定
     const r = await fetch('/api/daily/log', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({tag, done, todo, notes: finalNotes})
+      body: JSON.stringify({tag, done, todo: [], notes: finalNotes})
     });
     if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
     const d = await r.json();
     document.getElementById('dailyDone').value = '';
-    document.getElementById('dailyTodo').value = '';
     document.getElementById('dailyNotes').value = '';
     document.getElementById('dailyFiles').value = '';
     updateDailyFileSummary();
+    // 显示 OfferClaw 自动判定的未完成/偏离
+    const box = document.getElementById('dailyAutoTodo');
+    const auto = d.auto_incomplete || [];
+    if (box) {
+      box.style.display = 'block';
+      box.innerHTML = auto.length
+        ? `<strong style="color:var(--warning)">⚠ OfferClaw 对照今日计划，识别未完成 ${auto.length} 项：</strong><br>` +
+          auto.map(t => `· ${escapeHtml(t)}`).join('<br>')
+        : `<span style="color:var(--success)">✓ OfferClaw 对照今日计划：全部覆盖，干得漂亮！</span>`;
+    }
     const attachText = uploaded.length ? ` / 附件 ${uploaded.length}` : '';
-    showToast(`✓ 已留痕（完成 ${d.done_count} / 未完成 ${d.todo_count}${attachText}）`);
+    showToast(`✓ 已留痕（完成 ${d.done_count} / 系统判定未完成 ${auto.length}${attachText}）`);
     markFlowDone('today');
     await loadDaily();
   } catch (e) {
@@ -1704,6 +1756,14 @@ async function loadToday(){
     const cw = d.plan && d.plan.has_plan ? d.plan.current_week : null;
     if (cw) metaTxt += ` · 📋 本周计划 第${cw.n}周${d.plan.edited_by_user?'(已调整)':''}${d.plan.expired?'(已到期)':''}`;
     meta.textContent = metaTxt;
+    // 每日执行卡：OfferClaw 今日计划（对照执行）
+    const dailyPlanList = document.getElementById('dailyPlanList');
+    if (dailyPlanList) {
+      const tp = d.today_plan || [];
+      dailyPlanList.innerHTML = tp.length
+        ? tp.map(t => `· ${escapeHtml(t)}`).join('<br>')
+        : '（暂无计划项：先生成一份学习计划，这里会给出今天该做什么）';
+    }
     document.getElementById('metricToday').textContent = d.today || '—';
     document.getElementById('metricTodayHint').textContent = d.source || '今日建议';
     document.getElementById('metricApps').textContent = d.stats?.applications_total ?? '0';
@@ -1951,6 +2011,7 @@ loadToday();
 pingHealth();
 loadCurrentPlan();
 loadKbStatus();
+loadGapSummary();
 </script>
 </body>
 </html>

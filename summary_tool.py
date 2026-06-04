@@ -133,6 +133,54 @@ def _resolve_chat_config(api_key: str) -> dict:
     return {**cfg, "bearer": bearer}
 
 
+def _sig_tokens(text: str) -> set:
+    """抽取显著词：英文/数字技术词（≥2 字符）+ 中文 2-gram。用于完成度比对。"""
+    t = str(text)
+    toks = set(m.lower() for m in re.findall(r"[A-Za-z][A-Za-z0-9_+\-\.]{1,}", t))
+    # 中文按标点切块后取 2-gram
+    for chunk in re.split(r"[\s\d\.,，。、:：;；()（）\[\]【】\-—/·]+", t):
+        chunk = re.sub(r"[A-Za-z0-9_+\-\.]+", "", chunk)
+        for i in range(len(chunk) - 1):
+            toks.add(chunk[i:i + 2])
+    return toks
+
+
+# 比对时忽略的"框架性"高频词：几乎每条计划/留痕里都有，不构成完成证据
+_STOP_2GRAMS = {"推进", "本周", "主线", "交付", "完成", "学习", "今日", "今天",
+                "任务", "计划", "建议", "继续", "开始", "进行", "第周"}
+
+
+def analyze_incomplete(done: list, planned: list) -> list:
+    """对照"OfferClaw 今日计划"判定未完成项（确定性启发式，不调 LLM）。
+
+    规则：planned 中某项，若没有任一 done 条目与其共享 ≥2 个显著词
+    （或 ≥1 个英文技术词），则判为未完成。done 为空 → 全部未完成。
+    晚间 LLM 复盘会在此基础上做更细的偏离度分析；这里只做即时反馈。
+    """
+    done = [str(d).strip() for d in (done or []) if str(d).strip()]
+    planned = [str(p).strip() for p in (planned or []) if str(p).strip()]
+    if not planned:
+        return []
+    if not done:
+        return planned[:]
+    done_toks = set()
+    done_tech = set()
+    for d in done:
+        toks = _sig_tokens(d)
+        done_toks |= toks
+        done_tech |= {t for t in toks if re.match(r"^[a-z]", t)}
+    incomplete = []
+    for p in planned:
+        p_toks = _sig_tokens(p) - _STOP_2GRAMS
+        p_tech = {t for t in p_toks if re.match(r"^[a-z]", t)}
+        overlap = p_toks & done_toks
+        tech_hit = bool(p_tech & done_tech)
+        if tech_hit or len(overlap) >= 2:
+            continue
+        incomplete.append(p)
+    return incomplete
+
+
 def append_structured_daily_log(tag: str = "", done=None, todo=None,
                                 notes: str = "", date_str: str = None) -> dict:
     """把结构化留痕写入 daily_log.md，字段用 ### 分节（与 P2 _parse_log_block 对齐）。

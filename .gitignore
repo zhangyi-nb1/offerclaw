@@ -63,6 +63,9 @@ knowledge_base/_pending/
 # 知识库数据（含爬取的第三方图文，属本地私有数据，不入公开仓库）
 knowledge_base/
 
+# 缺口信息库（目标 JD + 缺口累积，个人求职数据，本地私有）
+gap_store.json
+
 # 图转文缓存（生成物）
 knowledge_base/_image_captions.json
 # .env 备份
