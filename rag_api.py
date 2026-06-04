@@ -257,6 +257,7 @@ class TodayResponse(BaseModel):
     source: str = ""
     next_actions: list[str] = []
     adjustments: list[str] = []  # P2：复盘沉淀的次日调整规则
+    plan: dict = {}              # 当前学习计划的本周重点（自动化引用的最新计划）
     stats: dict = {}
 
 

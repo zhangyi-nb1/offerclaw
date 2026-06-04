@@ -123,6 +123,15 @@ def _load_active_adjustments() -> List[str]:
         return []
 
 
+def _load_current_plan_focus(today_iso: str) -> dict:
+    """读取最新计划并定位"本周重点"，供今日建议/推送引用。失败静默返回 {has_plan:False}。"""
+    try:
+        from plan_gen import summarize_plan_for_automation
+        return summarize_plan_for_automation(today_iso)
+    except Exception:
+        return {"has_plan": False}
+
+
 def get_today_advice() -> Dict[str, object]:
     """生成"今天最该做什么"。返回结构供 /api/today 直接 JSON 化。"""
     apps_md = _read(APPLICATIONS_PATH)
@@ -163,9 +172,27 @@ def get_today_advice() -> Dict[str, object]:
     for a in adjustments:
         next_actions.append(f"【复盘调整】{a}")
 
+    # 2.6) 学习计划：所有自动化（今日建议 / 微信推送 / 提醒 / 再规划）都以
+    #      "最新计划（含用户手动调整）的本周重点"为参考。置顶为主线动作。
+    plan = _load_current_plan_focus(today)
+    cw = plan.get("current_week") if plan.get("has_plan") else None
+    if cw:
+        edited = "（你已手动调整的计划）" if plan.get("edited_by_user") else ""
+        line = f"【本周计划·第{cw['n']}周】{cw['theme']}"
+        if cw.get("deliverable"):
+            line += f" · 本周交付：{cw['deliverable']}"
+        if plan.get("expired"):
+            line = "【当前计划已到期，建议重新生成】" + line
+        next_actions.insert(0, line + edited)
+
     # 3) 兜底建议
     if not headline:
-        if rows:
+        if cw and not plan.get("expired"):
+            # 没有紧急投递时，以本周计划重点作为今日主线
+            headline = f"本周聚焦：{cw['theme']}"
+            reason = f"按你当前学习计划（第 {cw['n']} 周 · {plan.get('period','')}）推进。"
+            source = plan.get("plan_file", "学习计划")
+        elif rows:
             headline = "暂无紧急投递任务，建议复盘最近匹配过的岗位"
             reason = "applications.md 中没有处于活跃状态的投递。"
             source = "applications.md"
@@ -173,7 +200,7 @@ def get_today_advice() -> Dict[str, object]:
             headline = "建议先在 ② 卡片粘一段 JD 跑一次匹配，把缺口固化进 ③ 卡片"
             reason = "applications.md 暂无投递记录，建议先做匹配评估。"
             source = "默认策略"
-        next_actions.append("在 ② 卡片粘 JD → ③ 看缺口 → ④ 生成 4 周计划。")
+            next_actions.append("在 ② 卡片粘 JD → ③ 看缺口 → ④ 生成 4 周计划。")
 
     return {
         "today": today,
@@ -182,6 +209,7 @@ def get_today_advice() -> Dict[str, object]:
         "source": source,
         "next_actions": next_actions,
         "adjustments": adjustments,
+        "plan": plan,
         "stats": {
             "applications_total": len(rows),
             "last_log_date": last_log or "",

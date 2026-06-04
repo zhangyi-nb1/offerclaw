@@ -290,7 +290,8 @@ def format_resources_block(resources: list[dict]) -> str:
 
 def build_messages(profile: str, plan_prompt: str, daily_log: str,
                    source_policy: str, target_rules: str, gaps: str,
-                   resources_block: str = "", project_context: str = "") -> list:
+                   resources_block: str = "", project_context: str = "",
+                   prev_plan: str = "") -> list:
     """组装要发给 LLM 的 messages。
 
     设计：把 5 份依赖文件作为 system 上下文，缺口清单作为 user 消息。
@@ -326,6 +327,14 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
             "2) 你对这些项目【只读】——只给学习/推进建议，绝不代为编码、修改、提交，"
             "措辞用『建议你/可以尝试』，不要写成『我来实现』；\n"
             "3) 若用户明确表示想『从零搭一个新项目来学习』，则可另规划新建项目（二者都支持）。\n"
+        )
+
+    if prev_plan:
+        system_content += (
+            f"\n========== 用户当前计划（最新版，可能含用户手动调整）==========\n{prev_plan}\n"
+            "再规划时的要求：在这份现有计划基础上**演进**——保留仍然有效的安排，"
+            "只针对新缺口/新调整说明做增量更新；**尊重用户手动改过的内容**（不要无故推翻）；"
+            "保持周次结构与已投入的进度连续，不要从零重排一份毫不相干的计划。\n"
         )
 
     project_directive = ""
@@ -444,9 +453,16 @@ def prepare_plan_messages(gaps: str) -> tuple[list, list[dict]]:
     resources_block = format_resources_block(resources)
     project_context = load_project_context()
 
+    # 再规划以"最新计划（含用户手动调整）"为基础演进；截断以控制上下文体积
+    prev_plan = ""
+    latest = load_latest_plan()
+    if latest and latest.get("content"):
+        prev_plan = latest["content"][:4000]
+
     messages = build_messages(
         profile, plan_prompt, daily_log, source_policy, target_rules,
         gaps, resources_block=resources_block, project_context=project_context,
+        prev_plan=prev_plan,
     )
     return messages, resources
 
@@ -496,6 +512,85 @@ def save_plan(content: str, edited_by_user: bool = False) -> str:
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
     return path
+
+
+def summarize_plan_for_automation(today_iso: str | None = None) -> dict:
+    """把"当前（最新）学习计划"提炼成自动化任务可直接引用的结构。
+
+    供 today_advice / 微信推送 / 提醒 / 复盘 / 再规划统一引用——
+    确保所有自动化都以**最新计划（含用户手动调整）**为参考。
+
+    返回（无计划时 has_plan=False）：
+      has_plan, plan_file, edited_by_user, period, expired,
+      current_week={n, theme, tags, deliverable} | None, weeks=[...], week_count
+    """
+    import re
+    import datetime
+
+    latest = load_latest_plan()
+    if not latest:
+        return {"has_plan": False}
+    content = latest["content"]
+    today = datetime.date.fromisoformat(today_iso) if today_iso else datetime.date.today()
+
+    # 计划周期：YYYY-MM-DD → YYYY-MM-DD
+    period = ""
+    period_start = period_end = None
+    mp = re.search(r"计划周期[:：]\s*(\d{4}-\d{2}-\d{2})\s*[→\-~>]+\s*(\d{4}-\d{2}-\d{2})", content)
+    if mp:
+        try:
+            period_start = datetime.date.fromisoformat(mp.group(1))
+            period_end = datetime.date.fromisoformat(mp.group(2))
+            period = f"{mp.group(1)} → {mp.group(2)}"
+        except ValueError:
+            pass
+
+    # 周计划层：Week N (可含日期) 主题：xxx  + 随后的 主线标签 / 交付物
+    wk_re = re.compile(r"Week\s*(\d+)[^\n主]*主题[:：]\s*(.+)")
+    lines = content.splitlines()
+    weeks: list[dict] = []
+    seen: set[int] = set()
+    for i, ln in enumerate(lines):
+        m = wk_re.search(ln)
+        if not m:
+            continue
+        n = int(m.group(1))
+        if n in seen:
+            continue
+        seen.add(n)
+        theme = m.group(2).strip().strip("：: ")
+        tags = deliverable = ""
+        for j in range(i + 1, min(i + 8, len(lines))):
+            if wk_re.search(lines[j]):
+                break
+            t1 = re.search(r"主线标签[:：]\s*(.+)", lines[j])
+            t2 = re.search(r"交付物[:：]\s*(.+)", lines[j])
+            if t1 and not tags:
+                tags = t1.group(1).strip().strip("[]")
+            if t2 and not deliverable:
+                deliverable = t2.group(1).strip()
+        weeks.append({"n": n, "theme": theme, "tags": tags, "deliverable": deliverable})
+
+    # 当前周：按 计划周期 起点 + 今天推算（不依赖每周日期范围，兼容退化格式）
+    current_week = None
+    if weeks:
+        if period_start:
+            idx = (today - period_start).days // 7 + 1
+        else:
+            idx = 1
+        idx = max(1, min(idx, len(weeks)))
+        current_week = next((w for w in weeks if w["n"] == idx), weeks[idx - 1])
+
+    return {
+        "has_plan": True,
+        "plan_file": latest["filename"],
+        "edited_by_user": latest["edited_by_user"],
+        "period": period,
+        "expired": bool(period_end and today > period_end),
+        "current_week": current_week,
+        "weeks": weeks,
+        "week_count": len(weeks),
+    }
 
 
 def load_latest_plan() -> dict | None:

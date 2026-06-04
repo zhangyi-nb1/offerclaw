@@ -1701,6 +1701,8 @@ async function loadToday(){
     head.textContent = d.headline || '（无建议）';
     let metaTxt = `来源 ${d.source||'-'} · 投递池 ${d.stats?.applications_total||0} 条`;
     if (d.stats?.last_log_date) metaTxt += ` · 最近日志 ${d.stats.last_log_date}`;
+    const cw = d.plan && d.plan.has_plan ? d.plan.current_week : null;
+    if (cw) metaTxt += ` · 📋 本周计划 第${cw.n}周${d.plan.edited_by_user?'(已调整)':''}${d.plan.expired?'(已到期)':''}`;
     meta.textContent = metaTxt;
     document.getElementById('metricToday').textContent = d.today || '—';
     document.getElementById('metricTodayHint').textContent = d.source || '今日建议';
