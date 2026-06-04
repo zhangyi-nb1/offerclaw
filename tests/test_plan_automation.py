@@ -83,6 +83,27 @@ def test_today_advice_prefers_day_tasks(monkeypatch):
     assert not any("推进本周主线" in t for t in tp)   # 有日任务时不再用周粒度兜底
 
 
+def test_normalize_plan_dates_fixes_llm_date_drift():
+    """LLM 连排日期会错标/重复（如 D5 标成 06-05）→ 按 开始日期+序号 确定性重写。"""
+    bad = ("计划周期：2026-06-05 → 2026-06-30\n"
+           "Week 1 (06-03 → 06-09) 主题：A\n"
+           "Week 2 (06-12 → 06-18) 主题：B\n"
+           "D1（06-05 周四）\n  核心任务：\n    1. 任务甲（预计 3h）\n"
+           "D5（06-05 周五）\n  核心任务：\n    1. 任务乙（预计 2h）\n")   # D5 错标成 06-05
+    out = plan_gen.normalize_plan_dates(bad, "2026-06-05")
+    assert "D1（06-05 周五）" in out          # 2026-06-05 实为周五，星期也被纠正
+    assert "D5（06-09 周二）" in out          # D5 = start+4
+    assert out.count("06-05 周") == 1        # 日期不再重复
+    # 周界与周期按 5 天总量重算
+    assert "Week 1 (06-05 → 06-11)" in out
+    assert "计划周期：2026-06-05 → 2026-06-09" in out  # 只有 5 个日标签 → 周期 5 天
+
+
+def test_normalize_plan_dates_noop_without_day_labels():
+    src = "计划周期：2026-06-05 → 2026-06-30\n没有日计划层的文本"
+    assert plan_gen.normalize_plan_dates(src, "2026-06-05") == src
+
+
 def test_summarize_flags_expired(monkeypatch):
     monkeypatch.setattr(plan_gen, "load_latest_plan", lambda: _fake_latest())
     s = plan_gen.summarize_plan_for_automation("2026-07-15")

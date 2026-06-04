@@ -662,9 +662,12 @@ async def gen_plan(req: PlanRequest):
             None, lambda: call_llm_plain(messages, api_key, max_tokens=7000)
         )
         # 退化产物（拒绝/无周结构）不落盘，避免污染"当前计划"
-        from plan_gen import is_degenerate_plan
+        from plan_gen import is_degenerate_plan, normalize_plan_dates
         if is_degenerate_plan(plan_md):
             return PlanResponse(plan_md=plan_md, saved_path="")
+        # 日期确定性归一（LLM 连排日期不可信，统一按 开始日期+序号 重写）
+        plan_md = normalize_plan_dates(
+            plan_md, req.start_date or datetime.date.today().isoformat())
         # 确定性追加参考资源附录，保证 API 路径也必含知识库引用
         plan_md = append_resources_appendix(plan_md, resources)
         path = save_plan(plan_md)
@@ -1381,10 +1384,13 @@ async def gen_plan_stream(req: PlanRequest):
                     loop.call_soon_threadsafe(q.put_nowait, ("tok", tok))
                 raw = "".join(full_text)
                 # 退化产物（拒绝/无周结构）不落盘，避免污染"当前计划"被后续注入自我复制
-                from plan_gen import is_degenerate_plan
+                from plan_gen import is_degenerate_plan, normalize_plan_dates
                 if is_degenerate_plan(raw):
                     loop.call_soon_threadsafe(q.put_nowait, ("done", ""))
                     return
+                # 日期确定性归一（LLM 连排日期不可信）
+                raw = normalize_plan_dates(
+                    raw, req.start_date or datetime.date.today().isoformat())
                 # 流结束后：确定性追加参考资源附录，再落盘
                 plan_md = append_resources_appendix(raw, resources)
                 # 把附录部分也作为最后一段 token 推给前端

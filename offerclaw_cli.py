@@ -115,6 +115,9 @@ def cmd_plan(gaps=None):
             "full_plan": plan,
         })
         return
+    from plan_gen import normalize_plan_dates
+    import datetime as _dt
+    plan = normalize_plan_dates(plan, _dt.date.today().isoformat())
     plan = append_resources_appendix(plan, resources)
     path = save_plan(plan)
     themes = _extract_weekly_themes(plan)

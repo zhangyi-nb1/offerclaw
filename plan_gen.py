@@ -336,8 +336,11 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
             "再规划时的要求：在这份现有计划基础上**演进**——保留仍然有效的安排，"
             "只针对新缺口/新调整说明做增量更新；**尊重用户手动改过的内容**（不要无故推翻）。\n"
             "⚠️ 演进指的是**内容连续**（衔接已完成的进度、保留有效安排），"
-            "**日期与周次必须重排**：新计划一律从今天开始、从 Week 1 连续编号且 Week 1 包含今天；"
+            "**日期与周次必须重排**：新计划一律从开始日期起、从 Week 1 连续编号且 Week 1 包含开始日期；"
             "绝不允许沿用旧计划的周次、从 Week 2 开始输出、或把起始日推迟到未来。\n"
+            "完成度感知（中途重生成时遵循事实）：对照 system 里 daily_log.md 的实际记录——"
+            "**已完成的任务不要重复排期**；未完成/部分完成的结合优先级合理重排进剩余天数；"
+            "已过去的日期不出现在新计划里（历史以 daily_log 为准，不重写历史）。\n"
         )
 
     project_directive = ""
@@ -457,6 +460,69 @@ def _resolve_chat_config(api_key: str) -> dict:
         }
     bearer = build_zhipu_jwt(api_key) if cfg["is_zhipu"] else api_key
     return {**cfg, "bearer": bearer}
+
+
+def normalize_plan_dates(plan_md: str, start_iso: str = "") -> str:
+    """确定性重写计划日期：周期/周界/日标签全部由「开始日期 + 序号」推导。
+
+    LLM 连续生成几十个日期极易算错（错日/重日/错星期），导致"总计划与
+    每日执行对不上"。日期不交给 LLM：生成后以本函数为唯一事实源重写——
+      - 第 i 个日块标签 → D{i}（MM-DD 周X），日期 = start + (i-1)
+      - Week N 头 → start+(N-1)*7 … min(start+N*7-1, end)
+      - 计划周期行 → start → start + 总天数 - 1
+    没有日标签的文本原样返回。
+    """
+    import re
+    import datetime
+
+    lines = plan_md.splitlines()
+    day_re = re.compile(r"^(\s*)D\d+\s*[（(][^）)]*[）)]")
+    day_count = sum(1 for ln in lines if day_re.match(ln))
+    if day_count == 0:
+        return plan_md
+
+    start = None
+    if start_iso:
+        try:
+            start = datetime.date.fromisoformat(start_iso)
+        except ValueError:
+            pass
+    if start is None:
+        m = re.search(r"计划周期[:：]\s*(\d{4}-\d{2}-\d{2})", plan_md)
+        if m:
+            start = datetime.date.fromisoformat(m.group(1))
+    if start is None:
+        return plan_md
+
+    wd = "一二三四五六日"
+
+    def _fmt(d: "datetime.date") -> str:
+        return f"{d.month:02d}-{d.day:02d} 周{wd[d.weekday()]}"
+
+    out, i_day = [], 0
+    for ln in lines:
+        if day_re.match(ln):
+            i_day += 1
+            d = start + datetime.timedelta(days=i_day - 1)
+            ln = day_re.sub(lambda mo: f"{mo.group(1)}D{i_day}（{_fmt(d)}）", ln, count=1)
+        out.append(ln)
+    plan_md = "\n".join(out)
+
+    end = start + datetime.timedelta(days=day_count - 1)
+    plan_md = re.sub(
+        r"(计划周期[:：]\s*)\d{4}-\d{2}-\d{2}(\s*→\s*)\d{4}-\d{2}-\d{2}",
+        lambda mo: f"{mo.group(1)}{start.isoformat()}{mo.group(2)}{end.isoformat()}",
+        plan_md)
+
+    def _wk(mo):
+        n = int(mo.group(1))
+        ws = start + datetime.timedelta(days=(n - 1) * 7)
+        we = min(ws + datetime.timedelta(days=6), end)
+        return f"Week {n} ({ws.month:02d}-{ws.day:02d} → {we.month:02d}-{we.day:02d})"
+
+    plan_md = re.sub(
+        r"Week\s*(\d+)\s*\(\s*\d{1,2}-\d{1,2}\s*→\s*\d{1,2}-\d{1,2}\s*\)", _wk, plan_md)
+    return plan_md
 
 
 def is_degenerate_plan(content: str) -> bool:
