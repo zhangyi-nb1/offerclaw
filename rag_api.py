@@ -184,6 +184,8 @@ class FlowRunResponse(BaseModel):
 class PlanRequest(BaseModel):
     gaps: str = ""
     revision_note: str = ""   # LLM 修改计划：用户一次性修改要求（无记忆，不落盘）
+    start_date: str = ""      # 计划开始日期（用户定，空=今天）
+    end_date: str = ""        # 结束日期（空=系统按任务量估算周期）
 
 
 class PlanResponse(BaseModel):
@@ -653,10 +655,11 @@ async def gen_plan(req: PlanRequest):
             raise HTTPException(status_code=500, detail=f"{api_key_env} 未配置")
         gaps = _resolve_plan_gaps(req.gaps)
         # 统一入口：读依赖 + RAG 检索资源 + 组装 messages（与 CLI 一致）
-        messages, resources = prepare_plan_messages(gaps, revision_note=req.revision_note)
+        messages, resources = prepare_plan_messages(gaps, revision_note=req.revision_note,
+                                                  start_date=req.start_date, end_date=req.end_date)
         loop = asyncio.get_event_loop()
         plan_md = await loop.run_in_executor(
-            None, lambda: call_llm_plain(messages, api_key, max_tokens=3500)
+            None, lambda: call_llm_plain(messages, api_key, max_tokens=7000)
         )
         # 退化产物（拒绝/无周结构）不落盘，避免污染"当前计划"
         from plan_gen import is_degenerate_plan
@@ -1363,7 +1366,8 @@ async def gen_plan_stream(req: PlanRequest):
     )
     gaps = _resolve_plan_gaps(req.gaps)
     # 统一入口：读依赖 + RAG 检索资源 + 组装 messages（与 CLI / 非流式一致）
-    messages, resources = prepare_plan_messages(gaps, revision_note=req.revision_note)
+    messages, resources = prepare_plan_messages(gaps, revision_note=req.revision_note,
+                                                  start_date=req.start_date, end_date=req.end_date)
 
     async def generate():
         loop = asyncio.get_event_loop()
@@ -1372,7 +1376,7 @@ async def gen_plan_stream(req: PlanRequest):
 
         def _producer():
             try:
-                for tok in call_llm_stream(messages, api_key, max_tokens=3500):
+                for tok in call_llm_stream(messages, api_key, max_tokens=7000):
                     full_text.append(tok)
                     loop.call_soon_threadsafe(q.put_nowait, ("tok", tok))
                 raw = "".join(full_text)

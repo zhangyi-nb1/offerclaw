@@ -1003,6 +1003,11 @@
             </div>
             <span class="status-dot" id="planStatus">加载中</span>
           </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:var(--text-muted)">
+            <span>开始</span><input class="input compact" id="planStartDate" type="date" style="max-width:150px" title="计划开始日期（由你定）">
+            <span>结束</span><input class="input compact" id="planEndDate" type="date" style="max-width:150px" title="可留空：系统按任务量估算合适周期">
+            <span style="font-size:11px">结束留空 = 按任务量自动定周期；全周期逐日展开</span>
+          </div>
           <div class="card-actions" id="planActionsView" style="margin-top:0; margin-bottom:12px">
             <button class="btn" onclick="doPlan()" title="基于 画像+知识库+缺口库 三件套生成/更新计划。目标 JD 只在 ② 匹配后点「设为目标」才会入缺口库——本按钮不会新增目标">生成计划</button>
             <button class="btn secondary" id="planReviseBtn" onclick="enterPlanRevise()" title="用一段话描述哪里不满意、希望怎么改，LLM 结合背景信息重新制定——适合问题较多时，不用逐条手改">LLM 修改计划</button>
@@ -1461,7 +1466,9 @@ async function doPlan(revisionNote = ''){
   try {
     const r = await fetch('/api/plan/stream', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({gaps: gaps, revision_note: revisionNote})
+      body: JSON.stringify({gaps: gaps, revision_note: revisionNote,
+                            start_date: document.getElementById('planStartDate')?.value || '',
+                            end_date: document.getElementById('planEndDate')?.value || ''})
     });
     if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
     const reader = r.body.getReader();
@@ -2253,6 +2260,8 @@ loadKbStatus();
 loadGapSummary();
 loadApplications();
 loadResumeTemplates();
+// 计划开始日期默认今天（用户可改）
+(() => { const el = document.getElementById('planStartDate'); if (el && !el.value) el.value = new Date().toISOString().slice(0,10); })();
 </script>
 </body>
 </html>

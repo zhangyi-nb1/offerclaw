@@ -291,7 +291,8 @@ def format_resources_block(resources: list[dict]) -> str:
 def build_messages(profile: str, plan_prompt: str, daily_log: str,
                    source_policy: str, target_rules: str, gaps: str,
                    resources_block: str = "", project_context: str = "",
-                   prev_plan: str = "", revision_note: str = "") -> list:
+                   prev_plan: str = "", revision_note: str = "",
+                   start_date: str = "", end_date: str = "") -> list:
     """组装要发给 LLM 的 messages。
 
     设计：把 5 份依赖文件作为 system 上下文，缺口清单作为 user 消息。
@@ -357,9 +358,22 @@ def build_messages(profile: str, plan_prompt: str, daily_log: str,
             "（哪里不满意、希望怎么改），其余仍然有效的安排保留；事实与资源仍只能来自"
             "画像/知识库/缺口清单，不为迎合要求而编造。"
         )
+    start = (start_date or "").strip() or datetime.date.today().isoformat()
+    if (end_date or "").strip():
+        period_directive = (
+            f"计划开始日期：{start}（用户指定）；结束日期：{end_date.strip()}（用户指定）。"
+            "周期严格按这两个日期排，Week 1 从开始日期起。"
+        )
+    else:
+        period_directive = (
+            f"计划开始日期：{start}（用户指定）；结束日期：用户未指定——"
+            "由你按『任务总量 ÷ 每周可投入工时』估算合适周数（向上取整，通常 2-8 周），"
+            "并在计划开头一句话写明估算依据。"
+        )
     user_content = (
-        "请按 plan_prompt.md 的 9 步流程，基于下面这份缺口清单生成 4 周计划。\n"
-        "今天日期是 " + datetime.date.today().isoformat() + "。"
+        "请按 plan_prompt.md 的 9 步流程，基于下面这份缺口清单生成学习计划。\n"
+        "今天日期是 " + datetime.date.today().isoformat() + "。\n"
+        + period_directive
         + project_directive + revision_directive + "\n\n"
         "========== 缺口清单 ==========\n" + gaps
     )
@@ -494,7 +508,8 @@ def ensure_gap_metadata(gaps: str) -> str:
     return "\n".join(out)
 
 
-def prepare_plan_messages(gaps: str, revision_note: str = "") -> tuple[list, list[dict]]:
+def prepare_plan_messages(gaps: str, revision_note: str = "",
+                          start_date: str = "", end_date: str = "") -> tuple[list, list[dict]]:
     """读依赖文件 + RAG 检索资源 + 组装 messages 的统一入口。
 
     CLI 与 FastAPI（/api/plan、/api/plan/stream）共用此函数，确保三条
@@ -527,6 +542,7 @@ def prepare_plan_messages(gaps: str, revision_note: str = "") -> tuple[list, lis
         profile, plan_prompt, daily_log, source_policy, target_rules,
         gaps, resources_block=resources_block, project_context=project_context,
         prev_plan=prev_plan, revision_note=revision_note,
+        start_date=start_date, end_date=end_date,
     )
     return messages, resources
 

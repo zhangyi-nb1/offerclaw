@@ -105,7 +105,7 @@ def cmd_plan(gaps=None):
         _json_out({"status": "error", "error": "未配置 OPENAI_API_KEY"})
         return
     messages, resources = prepare_plan_messages(gaps)
-    plan = call_llm_plain(messages, api_key, max_tokens=3500)
+    plan = call_llm_plain(messages, api_key, max_tokens=7000)
     # 退化产物（拒绝/无周结构）不落盘：避免污染"当前计划"并被后续注入自我复制
     from plan_gen import is_degenerate_plan
     if is_degenerate_plan(plan):
@@ -119,7 +119,7 @@ def cmd_plan(gaps=None):
     path = save_plan(plan)
     themes = _extract_weekly_themes(plan)
     # 微信友好摘要：每周主题 + 资源数 + 完整计划位置
-    lines = ["📚 学习计划已生成（4 周）："]
+    lines = ["📚 学习计划已生成："]
     lines += [f"  {t}" for t in themes] if themes else ["  （详见完整计划）"]
     lines.append(f"📎 参考资源 {len(resources)} 份，完整计划：{os.path.relpath(path, BASE_DIR)}")
     _json_out({
