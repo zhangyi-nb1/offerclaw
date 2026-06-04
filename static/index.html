@@ -909,7 +909,7 @@
       <!-- 卡片网格 -->
       <div class="section-header">
         <span class="section-title">求职作战面板</span>
-        <span class="section-action">7 个模块</span>
+        <span class="section-action">8 个模块</span>
       </div>
 
       <div class="grid">
@@ -1057,17 +1057,70 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </div>
             <div class="card-title-block">
-              <div class="card-title">简历素材</div>
-              <div class="card-subtitle">pitch + 故事库 · /api/resume</div>
+              <div class="card-title">简历工坊（项目 → 简历段）</div>
+              <div class="card-subtitle">按你的简历模板学习格式 · 生成可直接粘贴的项目经历</div>
             </div>
-            <span class="status-dot" id="resumeStatus">未加载</span>
+            <span class="status-dot" id="resumeStatus">就绪</span>
           </div>
-          <div class="card-actions" style="margin-top:0; margin-bottom:14px">
-            <button class="btn secondary" onclick="loadResume()">加载素材</button>
-            <button class="btn" onclick="buildResumeForJD()">JD 定制段（SSE）</button>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+            提供项目素材（三选一）：<strong>① 仓库地址</strong>（GitHub 公开仓库，自动抓 README/docs）
+            <strong>② 上传项目介绍</strong>（.md/.txt）<strong>③ 直接粘贴介绍文本</strong>。
+            OfferClaw 会分析要点（技术栈/难点/量化），按 <code>resume_templates/</code> 里你的模板格式输出。</p>
+          <input class="input compact" id="rpName" placeholder="项目名称（可选，留空自动识别）" style="margin-bottom:6px;width:100%">
+          <input class="input compact" id="rpRepo" placeholder="① 项目仓库地址，如 https://github.com/you/yourproject" style="margin-bottom:6px;width:100%">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+            <label class="file-label" for="rpFile">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.64 17.2a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              ② 上传 md/txt
+            </label>
+            <input class="file-input" id="rpFile" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain">
+            <span class="file-summary" id="rpFileSummary">未选择文件</span>
           </div>
-          <div class="card-body" id="resumeBody">
-            <p style="color:var(--text-muted)">点击上方按钮加载，或针对 ② JD 流式生成项目段。</p>
+          <textarea class="textarea" id="rpText" placeholder="③ 或直接粘贴项目介绍文本（README、项目总结等）" style="min-height:56px"></textarea>
+          <div class="card-actions">
+            <button class="btn" onclick="buildResumeProject()">分析并生成简历段</button>
+            <button class="btn secondary" onclick="buildResumeForJD()">JD 定制段</button>
+            <button class="btn secondary" onclick="loadResume()">素材库</button>
+          </div>
+          <div class="card-body" id="resumeBody" style="margin-top:12px">
+            <p style="color:var(--text-muted)">生成结果会显示在这里，可直接复制进简历。</p>
+          </div>
+        </div>
+
+        <!-- 7.5 投递管理 -->
+        <div class="card apply-card" style="grid-column: span 2">
+          <div class="card-head">
+            <div class="card-icon" style="color:var(--success);background:var(--success-soft)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+            <div class="card-title-block">
+              <div class="card-title">投递管理（真实投递追踪）</div>
+              <div class="card-subtitle">记录企业/岗位/进度/时间点 · 经验总结可入知识库强指导学习</div>
+            </div>
+            <span class="status-dot" id="applyStatus">加载中</span>
+          </div>
+
+          <div class="card-body" id="applyListBody" style="margin-bottom:12px">
+            <p style="color:var(--text-muted)">加载投递清单…</p>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+            <input class="input compact" id="apCompany" placeholder="企业名 *">
+            <input class="input compact" id="apPosition" placeholder="投递岗位 *">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
+            <select class="input compact" id="apStatus"></select>
+            <input class="input compact" id="apDate" type="date">
+            <input class="input compact" id="apStage" placeholder="阶段（笔试/一面/…）">
+          </div>
+          <input class="input compact" id="apNext" placeholder="下一步动作（可选，如：6-10 前准备一面八股）" style="width:100%;margin-bottom:6px">
+          <textarea class="textarea" id="apExperience" placeholder="经验总结（可选）：笔试/面试真题、流程、教训——亲历经验对 OfferClaw 价值极高，会强指导学习计划与每日建议" style="min-height:56px"></textarea>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);margin:8px 0">
+            <input type="checkbox" id="apAddToKb" checked> 把经验总结加入知识库（指导 RAG 问答 / 学习计划 / 每日建议）
+          </label>
+          <div class="card-actions">
+            <button class="btn" onclick="submitApplication()">记录投递进展</button>
+            <button class="btn secondary" onclick="loadApplications()">刷新清单</button>
           </div>
         </div>
 
@@ -2001,6 +2054,134 @@ function pickKbPending(saved){
     </div>`;
 }
 
+// ===== 投递管理 =====
+async function loadApplications(){
+  const body = document.getElementById('applyListBody');
+  const sel = document.getElementById('apStatus');
+  try {
+    const d = await fetch('/api/applications').then(r=>r.json());
+    if (sel && !sel.options.length) {
+      sel.innerHTML = (d.statuses||[]).map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    }
+    const rows = d.rows || [];
+    setStatus('applyStatus', 'ok', `${rows.length} 条`);
+    if (!rows.length) {
+      body.innerHTML = '<p style="color:var(--text-muted)">还没有真实投递记录。投出第一份就来登记，OfferClaw 会跟踪进度并提醒。</p>';
+      return;
+    }
+    body.innerHTML = rows.map(r => {
+      const g = k => { for (const key in r) if (key.includes(k)) return r[key]; return ''; };
+      return `<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+        <strong style="flex:0 0 auto">${escapeHtml(g('公司'))}</strong>
+        <span style="flex:1;min-width:0;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(g('岗位'))}</span>
+        <span class="chip accent">${escapeHtml(g('状态'))}</span>
+        <span style="color:var(--text-muted)">${escapeHtml(g('日期'))}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    setStatus('applyStatus', 'err', '失败');
+    body.innerHTML = `<p style="color:var(--error)">读取失败：${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function submitApplication(){
+  const company = document.getElementById('apCompany').value.trim();
+  const position = document.getElementById('apPosition').value.trim();
+  if (!company || !position) { showToast('企业名与投递岗位必填'); return; }
+  const payload = {
+    company, position,
+    status: document.getElementById('apStatus').value,
+    date: document.getElementById('apDate').value || '',
+    next_action: document.getElementById('apNext').value.trim(),
+    experience: document.getElementById('apExperience').value.trim(),
+    experience_stage: document.getElementById('apStage').value.trim(),
+    add_to_kb: document.getElementById('apAddToKb').checked,
+  };
+  setStatus('applyStatus', 'run', '写入中');
+  try {
+    const r = await fetch('/api/applications/upsert', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+    let msg = `✓ ${d.action==='updated'?'已更新':'已记录'}：${company} · ${payload.status}`;
+    if (d.experience_saved) {
+      msg += d.kb_ingest === 'ok'
+        ? `，经验已入知识库（+${d.kb_chunks_added} 块）`
+        : '，经验已保存' + (d.kb_ingest==='failed' ? '（入库失败，可稍后重试）' : '');
+      if (d.kb_ingest === 'ok') loadKbStatus();
+    }
+    showToast(msg);
+    document.getElementById('apExperience').value = '';
+    document.getElementById('apNext').value = '';
+    loadApplications();
+    loadToday();   // 投递进展会改变今日建议
+  } catch (e) {
+    setStatus('applyStatus', 'err', '失败');
+    showToast('记录失败：' + e.message);
+  }
+}
+
+// ===== 简历工坊：项目 → 简历段 =====
+let RP_FILE_TEXT = '';
+document.getElementById('rpFile')?.addEventListener('change', async e => {
+  const f = e.target.files[0];
+  const sum = document.getElementById('rpFileSummary');
+  if (!f) { RP_FILE_TEXT=''; sum.textContent='未选择文件'; return; }
+  RP_FILE_TEXT = await f.text();
+  sum.textContent = `${f.name}（${RP_FILE_TEXT.length} 字）`;
+});
+
+async function buildResumeProject(){
+  const repo = document.getElementById('rpRepo').value.trim();
+  const pasted = document.getElementById('rpText').value.trim();
+  const text = pasted || RP_FILE_TEXT;   // 粘贴优先，其次上传文件
+  if (!repo && !text) { showToast('请提供 仓库地址 / 上传文件 / 粘贴文本 之一'); return; }
+  const body = document.getElementById('resumeBody');
+  body.innerHTML = '<p style="color:var(--text-muted)" id="rpMeta">⏳ 汇集项目素材…</p><pre id="rpStream" class="cursor"></pre>';
+  const streamEl = document.getElementById('rpStream');
+  setStatus('resumeStatus', 'run', '生成中');
+  try {
+    const r = await fetch('/api/resume/project/stream', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({repo_url: repo, text: text, project_name: document.getElementById('rpName').value.trim()})
+    });
+    if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream:true});
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') {
+          streamEl.classList.remove('cursor');
+          body.insertAdjacentHTML('beforeend',
+            '<div class="card-actions"><button class="btn secondary" onclick="navigator.clipboard.writeText(document.getElementById(\'rpStream\').textContent).then(()=>showToast(\'已复制，可直接粘贴进简历\'))">📋 复制简历段</button></div>');
+          setStatus('resumeStatus', 'ok', '已生成');
+          return;
+        }
+        try {
+          const c = JSON.parse(data);
+          if (c.meta) document.getElementById('rpMeta').textContent = `素材来源：${c.meta.origin} · 按模板模式生成中…`;
+          else if (c.text) { streamEl.textContent += c.text; streamEl.scrollTop = streamEl.scrollHeight; }
+        } catch (e) {}
+      }
+    }
+    streamEl.classList.remove('cursor');
+    setStatus('resumeStatus', 'ok', '完成');
+  } catch (e) {
+    body.innerHTML = `<p style="color:var(--error)">生成失败：${escapeHtml(e.message)}</p>`;
+    setStatus('resumeStatus', 'err', '失败');
+  }
+}
+
 // ===== Boot =====
 document.getElementById('jdInput')?.addEventListener('input', updateJDFlowState);
 document.getElementById('kbFile')?.addEventListener('change', e => kbAddFile(e.target.files[0]));
@@ -2012,6 +2193,7 @@ pingHealth();
 loadCurrentPlan();
 loadKbStatus();
 loadGapSummary();
+loadApplications();
 </script>
 </body>
 </html>

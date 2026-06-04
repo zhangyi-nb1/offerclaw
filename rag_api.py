@@ -225,6 +225,26 @@ class GapTargetRequest(BaseModel):
     company: str = ""
 
 
+class ApplicationUpsertRequest(BaseModel):
+    company: str
+    position: str
+    status: str                  # applications_store.STATUSES 之一
+    date: str = ""               # 默认今天
+    source: str = ""
+    location: str = ""
+    next_action: str = ""
+    note: str = ""
+    experience: str = ""         # 经验总结（笔试/面试真题、流程、教训）
+    experience_stage: str = ""   # 笔试 / 一面 / 二面 / HR面 / 终面 / 其他
+    add_to_kb: bool = False      # 经验是否加入知识库（指导 RAG 与学习计划）
+
+
+class ResumeProjectRequest(BaseModel):
+    repo_url: str = ""           # 项目仓库地址（GitHub 公开仓库优先）
+    text: str = ""               # 项目介绍文本（或上传文件解码后的内容）
+    project_name: str = ""
+
+
 class DailyResponse(BaseModel):
     today_log: str = ""
     recent_summary: str = ""
@@ -746,6 +766,125 @@ async def get_gaps():
     except Exception as e:
         _log.exception("get_gaps failed")
         raise HTTPException(status_code=500, detail=f"读取缺口库失败: {str(e)}")
+
+
+# =====================================================
+# 投递管理：用户上传真实投递情况 + 亲历经验入知识库
+# =====================================================
+
+@app.get("/api/applications")
+async def get_applications():
+    """投递清单（过滤 [DEMO] 示例行）+ 状态枚举。"""
+    try:
+        from applications_store import list_applications, STATUSES
+        return {"status": "ok", "rows": list_applications(), "statuses": STATUSES}
+    except Exception as e:
+        _log.exception("get_applications failed")
+        raise HTTPException(status_code=500, detail=f"读取投递清单失败: {str(e)}")
+
+
+@app.post("/api/applications/upsert")
+async def upsert_application_api(req: ApplicationUpsertRequest):
+    """新增/更新一条真实投递（按 公司+岗位 定位，备注追加时间线）。
+
+    带经验总结时落盘 experience_posts/；勾选 add_to_kb 则**增量入向量库**
+    （用户亲历的第一手经验，强指导 RAG 问答、学习计划与每日建议）。
+    """
+    import asyncio
+    try:
+        from applications_store import upsert_application, save_experience
+        out = upsert_application(
+            req.company, req.position, req.status,
+            date=req.date, source=req.source, location=req.location,
+            next_action=req.next_action, note=req.note,
+        )
+        if out.get("status") != "ok":
+            raise HTTPException(status_code=400, detail=out.get("error", "写入失败"))
+
+        if (req.experience or "").strip():
+            exp = save_experience(req.company, req.position,
+                                  req.experience_stage or "投递过程", req.experience)
+            if exp.get("status") != "ok":
+                out["experience_error"] = exp.get("error", "经验保存失败")
+            else:
+                out["experience_saved"] = exp["saved"]
+                if req.add_to_kb:
+                    import subprocess
+                    before = _kb_count()
+                    loop = asyncio.get_event_loop()
+                    proc = await loop.run_in_executor(None, lambda: subprocess.run(
+                        [os.path.join(BASE_DIR, ".venv/bin/python"), "rag_ingest.py",
+                         "--add", exp["saved"], "--source-type", "experience"],
+                        cwd=BASE_DIR, capture_output=True, text=True, timeout=300,
+                    ))
+                    _kb_clear_cache()
+                    after = _kb_count()
+                    out["kb_ingest"] = "ok" if proc.returncode == 0 else "failed"
+                    out["kb_chunks_added"] = max(0, after - before)
+                    out["kb_chunks_total"] = after
+        return out
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log.exception("upsert_application failed")
+        raise HTTPException(status_code=500, detail=f"投递记录失败: {str(e)}")
+
+
+# =====================================================
+# 简历：项目 → 简历项目经历段（模板学习式生成）
+# =====================================================
+
+@app.post("/api/resume/project/stream")
+async def resume_project_stream(req: ResumeProjectRequest):
+    """项目素材（仓库地址 / md·txt / 粘贴文本）→ 按简历模板模式生成项目经历段。SSE 流式。"""
+    import asyncio, json as _json
+    api_key, api_key_env = _active_llm_api_key()
+    if not api_key:
+        raise HTTPException(status_code=500, detail=f"{api_key_env} 未配置")
+    from resume_project import gather_material, build_project_messages
+    from plan_gen import call_llm_stream
+
+    loop = asyncio.get_event_loop()
+    # 素材汇集（仓库抓取可能耗时，放线程池）
+    gathered = await loop.run_in_executor(
+        None, lambda: gather_material(repo_url=req.repo_url, text=req.text))
+    if gathered.get("status") != "ok":
+        raise HTTPException(status_code=400, detail=gathered.get("error", "素材获取失败"))
+
+    profile = ""
+    try:
+        with open(os.path.join(BASE_DIR, "user_profile.md"), encoding="utf-8") as f:
+            profile = f.read()
+    except OSError:
+        pass
+    messages = build_project_messages(gathered["material"], req.project_name, profile)
+
+    async def generate():
+        q: asyncio.Queue = asyncio.Queue()
+        # 先告知素材来源（meta 事件）
+        yield f"data: {_json.dumps({'meta': {'origin': gathered['origin']}}, ensure_ascii=False)}\n\n"
+
+        def _producer():
+            try:
+                for tok in call_llm_stream(messages, api_key, max_tokens=1800):
+                    loop.call_soon_threadsafe(q.put_nowait, tok)
+            except Exception as exc:
+                loop.call_soon_threadsafe(q.put_nowait, f"\n\n[生成错误: {exc}]")
+            finally:
+                loop.call_soon_threadsafe(q.put_nowait, None)
+
+        loop.run_in_executor(None, _producer)
+        while True:
+            tok = await q.get()
+            if tok is None:
+                yield "data: [DONE]\n\n"
+                break
+            yield f"data: {_json.dumps({'text': tok}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        generate(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/daily/log")

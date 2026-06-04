@@ -406,9 +406,12 @@ def _gh_list_content_files(owner: str, repo: str) -> tuple:
     return branch, sorted(files)
 
 
-def crawl_repo(url: str) -> dict:
-    """抓取整个 GitHub 仓库的**真实内容文件**（章节 .md / notebook），
-    拼成一篇知识文档 → 打分 → _pending/web/。修复"只抓 README 简介"的缺陷。
+def fetch_repo_text(url: str) -> dict:
+    """抓取 GitHub 仓库的内容文件（.md/.ipynb）并拼成一篇长文。
+
+    返回 {status:"ok", text, repo, branch, files_captured, files_total_found}
+    或 {status:"error", error}。供 crawl_repo（入知识库）与
+    简历项目分析（/api/resume/project）等复用。
     """
     import requests
     parsed = parse_github_repo(url)
@@ -450,12 +453,25 @@ def crawl_repo(url: str) -> dict:
     header = (f"# {repo} —— GitHub 仓库内容采集\n\n"
               f"> 仓库：{repo_url}（分支 {branch}）\n"
               f"> 已采集 {len(used)} 个内容文件，共 {total} 字\n")
-    full = header + "".join(parts)
-    result = _score_and_save(full, repo_url, origin="github仓库采集")
+    return {
+        "status": "ok", "text": header + "".join(parts), "repo": repo_url,
+        "branch": branch, "files_captured": len(used), "files_total_found": len(files),
+    }
+
+
+def crawl_repo(url: str) -> dict:
+    """抓取整个 GitHub 仓库的**真实内容文件**（章节 .md / notebook），
+    拼成一篇知识文档 → 打分 → _pending/web/。修复"只抓 README 简介"的缺陷。
+    """
+    fetched = fetch_repo_text(url)
+    if fetched.get("status") != "ok":
+        return fetched
+    repo_url = fetched["repo"]
+    result = _score_and_save(fetched["text"], repo_url, origin="github仓库采集")
     if result.get("status") == "ok":
         result["repo"] = repo_url
-        result["files_captured"] = len(used)
-        result["files_total_found"] = len(files)
+        result["files_captured"] = fetched["files_captured"]
+        result["files_total_found"] = fetched["files_total_found"]
         result["captured_paths"] = used
     return result
 

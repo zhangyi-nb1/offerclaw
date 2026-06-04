@@ -66,6 +66,10 @@ knowledge_base/
 # 缺口信息库（目标 JD + 缺口累积，个人求职数据，本地私有）
 gap_store.json
 
+# 简历模板（个人文件，仅保留 README 说明）
+resume_templates/*
+!resume_templates/README.md
+
 # 图转文缓存（生成物）
 knowledge_base/_image_captions.json
 # .env 备份
