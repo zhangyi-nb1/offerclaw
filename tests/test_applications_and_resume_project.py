@@ -80,18 +80,49 @@ def test_gather_material_requires_input():
     assert rp.gather_material()["status"] == "error"
 
 
-def test_build_messages_uses_default_pattern_without_templates(monkeypatch):
-    monkeypatch.setattr(rp, "load_templates", lambda: [])
+def test_build_messages_uses_default_pattern_without_materials(monkeypatch):
+    monkeypatch.setattr(rp, "load_materials", lambda: {"guidance": [], "examples": []})
     msgs = rp.build_project_messages("一个 RAG 项目的介绍", "OfferClaw")
     sysm = msgs[0]["content"]
     assert "内置默认模式" in sysm and "绝不编造数字" in sysm
     assert "OfferClaw" in msgs[1]["content"]
 
 
-def test_build_messages_injects_user_templates(monkeypatch):
-    monkeypatch.setattr(rp, "load_templates",
-                        lambda: [{"name": "tpl1.md", "content": "**项目｜角色**\n- 范例要点"}])
+_EXAMPLE_MD = """## 简历X
+#### 某 RAG 问答系统
+- 项目简介：面向问答场景。
+- 技术栈：Python、Chroma。
+- 技术亮点：
+  1. **混合检索**：实现 BM25 + 向量混合召回。
+"""
+
+
+def test_build_messages_injects_user_materials(monkeypatch):
+    monkeypatch.setattr(rp, "load_materials", lambda: {
+        "guidance": [{"name": "resume_writing_notes.md", "content": "项目经历最重要，信息密度要高。"}],
+        "examples": [{"name": "real_resume_examples.md", "content": _EXAMPLE_MD}],
+    })
     msgs = rp.build_project_messages("素材", "")
     sysm = msgs[0]["content"]
-    assert "模板范例 1：tpl1.md" in sysm and "严格学习其格式" in sysm
+    assert "写作原则" in sysm and "信息密度要高" in sysm          # 指导注入
+    assert "格式范例" in sysm and "某 RAG 问答系统" in sysm        # 范例条目注入
+    assert "输出结构（从用户提供的真实简历范例中学习" in sysm        # 蒸馏模式注入
+    assert "严禁混入输出" in sysm                                 # 防串味纪律
     assert "内置默认模式" not in sysm
+
+
+def test_extract_project_blocks_picks_only_project_entries():
+    md = ("### 实习经历\n#### 某公司实习\n- 工作内容：日常开发\n"
+          "### 项目经历\n#### 某 Agent 项目\n- 项目简介：x\n- 技术栈：y\n- 技术亮点：z\n")
+    blocks = rp.extract_project_blocks(md)
+    assert len(blocks) == 1 and "某 Agent 项目" in blocks[0]   # 实习小节（无技术栈等关键词）被跳过
+
+
+def test_guidance_classified_by_filename(tmp_path, monkeypatch):
+    monkeypatch.setattr(rp, "TEMPLATES_DIR", str(tmp_path))
+    (tmp_path / "resume_writing_notes.md").write_text("指导内容" * 20, encoding="utf-8")
+    (tmp_path / "my_resume.md").write_text("#### 项目A\n- 技术栈：x\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("说明", encoding="utf-8")
+    m = rp.load_materials()
+    assert [g["name"] for g in m["guidance"]] == ["resume_writing_notes.md"]
+    assert [e["name"] for e in m["examples"]] == ["my_resume.md"]

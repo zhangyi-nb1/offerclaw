@@ -1062,10 +1062,18 @@
             </div>
             <span class="status-dot" id="resumeStatus">就绪</span>
           </div>
+          <div class="kb-status-bar" style="margin-bottom:8px">
+            <span id="rpTplMeta">📚 简历材料加载中…</span>
+            <label class="file-label" for="rpTplFile" style="padding:3px 10px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.64 17.2a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              上传简历模板/写作指导
+            </label>
+            <input class="file-input" id="rpTplFile" type="file" accept=".md,.markdown,.txt" multiple>
+          </div>
           <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
             提供项目素材（三选一）：<strong>① 仓库地址</strong>（GitHub 公开仓库，自动抓 README/docs）
             <strong>② 上传项目介绍</strong>（.md/.txt）<strong>③ 直接粘贴介绍文本</strong>。
-            OfferClaw 会分析要点（技术栈/难点/量化），按 <code>resume_templates/</code> 里你的模板格式输出。</p>
+            OfferClaw 按你上传的简历模板/写作指导<strong>学习格式</strong>后输出（文件名含"写法/指导/note"按写作指导处理，其余按真实简历范例）。</p>
           <input class="input compact" id="rpName" placeholder="项目名称（可选，留空自动识别）" style="margin-bottom:6px;width:100%">
           <input class="input compact" id="rpRepo" placeholder="① 项目仓库地址，如 https://github.com/you/yourproject" style="margin-bottom:6px;width:100%">
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
@@ -2124,6 +2132,38 @@ async function submitApplication(){
 }
 
 // ===== 简历工坊：项目 → 简历段 =====
+async function loadResumeTemplates(){
+  const el = document.getElementById('rpTplMeta');
+  if (!el) return;
+  try {
+    const d = await fetch('/api/resume/templates').then(r=>r.json());
+    const n = (d.guidance||[]).length + (d.examples||[]).length;
+    el.textContent = n
+      ? `📚 已学习材料 ${n} 份（指导 ${(d.guidance||[]).length} · 范例 ${(d.examples||[]).length} · 项目条目 ${d.project_blocks||0} 个）`
+      : '📚 暂无简历材料：上传后生成将学习你的格式';
+    el.title = [...(d.guidance||[]), ...(d.examples||[])].join('\n');
+  } catch (e) { el.textContent = '📚 材料读取失败'; }
+}
+
+document.getElementById('rpTplFile')?.addEventListener('change', async e => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  for (const f of files) {
+    try {
+      const text = await f.text();
+      const r = await fetch('/api/resume/templates', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name: f.name, text})
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || r.status);
+      showToast(`✓ 已学习：${d.saved}`);
+    } catch (err) { showToast(`上传失败 ${f.name}：${err.message}`); }
+  }
+  e.target.value = '';
+  loadResumeTemplates();
+});
+
 let RP_FILE_TEXT = '';
 document.getElementById('rpFile')?.addEventListener('change', async e => {
   const f = e.target.files[0];
@@ -2194,6 +2234,7 @@ loadCurrentPlan();
 loadKbStatus();
 loadGapSummary();
 loadApplications();
+loadResumeTemplates();
 </script>
 </body>
 </html>

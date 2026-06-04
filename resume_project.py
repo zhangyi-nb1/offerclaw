@@ -4,49 +4,119 @@
 用户流程（用户定义）：
 - 用户提供项目素材（三选一）：①项目仓库地址（GitHub 公开仓库，自动抓 README/docs）
   ②项目介绍 .md/.txt 文件 ③直接粘贴项目介绍文本；
-- OfferClaw 分析项目要点（定位/技术栈/难点/量化结果），按"简历模板模式"输出
-  **可直接粘贴进简历**的项目经历段。
+- OfferClaw 分析项目要点（定位/技术栈/难点/量化结果），按从用户简历材料中
+  **学习到的格式模式**输出可直接粘贴进简历的项目经历段。
 
-模板学习：
-- 用户把自己认可的简历模板（.md）放进 ``resume_templates/``，生成时会把模板
-  作为**格式范例**注入 prompt，让输出严格贴合用户偏好的样式；
-- 目录为空时使用内置默认模式（经典三段式）。模板属个人文件，不入 git。
+模板学习（resume_templates/ 目录，个人材料不入 git）：
+- **写作指导**（文件名含 note/写法/指导）→ 作为写作原则注入；
+- **真实简历范例**（其余 .md）→ 抽取其中的「项目经历」条目块作为格式范例注入；
+- 以上材料存在时，按下方 _LEARNED_PATTERN（从用户材料蒸馏出的结构）严格输出；
+  目录为空时退回内置默认三段式。
 """
 
 from __future__ import annotations
 
 import glob
 import os
+import re
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "resume_templates")
 
 _MAX_MATERIAL_CHARS = 16000     # 项目素材注入上限
-_MAX_TEMPLATE_CHARS = 3000      # 单个模板注入上限
+_MAX_GUIDANCE_CHARS = 2800      # 写作指导注入上限
+_MAX_EXAMPLE_CHARS = 6000       # 范例条目合计注入上限
 
-# 内置默认模式：用户模板未提供时的兜底格式约定
+_GUIDANCE_HINTS = ("note", "notes", "写法", "指导", "guide", "writing")
+
+# ============ 从用户简历材料（写作指导 + 4 份真实简历）蒸馏出的格式模式 ============
+# 内容组织：项目名(副标题) → 时间|角色 → 项目简介 → 技术栈 → 编号技术亮点；
+# 亮点句式：**要点名：**动作+对象+技术手段+效果；量化单列或嵌入，绝不编造。
+_LEARNED_PATTERN = """【输出结构（从用户提供的真实简历范例中学习，必须严格遵循）】
+
+#### <项目名>（可带一句话副标题，如"基于 RAG 与 Agent 的智能模拟面试系统"）
+
+| 角色 | 时间 |
+| --- | --- |
+| <角色，如 AI 应用开发 / 独立开发> | YYYY.MM - YYYY.MM（素材中没有时间就写"时间待填"，不要编造） |
+
+- 项目简介：面向<场景>，构建/实现<什么系统>，重点解决<2-3 个核心痛点>，提升<价值>。（1-2 句）
+- 技术栈：<技术1>、<技术2>、…（顿号分隔，按与目标岗位的相关度排序，8-12 项）
+- 技术亮点：
+  1. **<要点名>**：设计/实现/构建<做了什么>，通过/基于/结合<关键技术与方案细节>，解决/提升/保障<效果>。
+  2. （共 3-5 条，每条都是「**要点名：**描述」结构——要点名是名词短语，
+     如"混合检索""上下文治理""增量索引"，不是动词开头的流水句）
+  3. …
+  4. **量化数据**：素材中有评测/性能/规模数字时**单列一条**集中呈现
+     （如 RAGAS 指标、耗时对比、召回率、测试用例数）；没有数字就省略此条，**绝不编造**。
+
+【句式与密度要求】
+- 描述句 = 动作（设计/实现/构建/搭建）+ 对象 + 技术手段 + 效果，每条 60~120 字，信息密度高；
+- 中文为主，技术名词保留英文（RAG、Agent、Rerank、Embedding…）；
+- 技能用词分级语义：熟悉 > 掌握 > 了解，不要乱用；
+- 让面试官 10 秒看懂：项目干什么、为什么做、你负责哪块、用了什么技术、做成什么样。"""
+
+# 用户材料缺失时的兜底（旧版默认）
 _DEFAULT_PATTERN = """（内置默认模式 · 经典三段式）
 **项目名 | 角色 | 起止时间**
 一句话定位：这个项目是什么、解决什么问题（含核心技术栈）。
 - 要点 1：动词开头 + 做了什么 + 用了什么技术 + 量化结果（数字/比例/规模）
-- 要点 2：突出难点与你的解法（如 检索召回从 X 提升到 Y）
+- 要点 2：突出难点与你的解法
 - 要点 3：工程化/协作亮点（部署、测试、CI、文档）
-成果：1 句话总结可验证的产出（线上效果 / star 数 / 用户量 / 性能指标）。"""
+成果：1 句话总结可验证的产出。"""
 
 
-def load_templates() -> list[dict]:
-    """读取 resume_templates/ 下用户提供的简历模板（README 除外）。"""
-    out = []
+def load_materials() -> dict:
+    """读取 resume_templates/ 用户材料，分两类返回 {guidance: [...], examples: [...]}。"""
+    guidance, examples = [], []
     for p in sorted(glob.glob(os.path.join(TEMPLATES_DIR, "*.md"))):
-        if os.path.basename(p).lower() == "readme.md":
+        name = os.path.basename(p)
+        if name.lower() == "readme.md":
             continue
         try:
             with open(p, encoding="utf-8") as f:
-                out.append({"name": os.path.basename(p),
-                            "content": f.read()[:_MAX_TEMPLATE_CHARS]})
+                content = f.read()
         except OSError:
             continue
-    return out
+        item = {"name": name, "content": content}
+        if any(h in name.lower() for h in _GUIDANCE_HINTS):
+            guidance.append(item)
+        else:
+            examples.append(item)
+    return {"guidance": guidance, "examples": examples}
+
+
+def load_templates() -> list[dict]:
+    """兼容旧接口：返回全部用户材料列表（guidance + examples）。"""
+    m = load_materials()
+    return m["guidance"] + m["examples"]
+
+
+def extract_project_blocks(md: str, max_chars: int = _MAX_EXAMPLE_CHARS) -> list[str]:
+    """从简历范例中抽取「项目经历」条目块（#### 级标题到下一个标题之间）。
+
+    范例文件是整份简历（含教育/实习/技能），但本任务只需要项目条目的写法，
+    抽出来注入能省 token 并让 LLM 聚焦正确的格式。
+    """
+    blocks: list[str] = []
+    lines = md.splitlines()
+    starts = [i for i, ln in enumerate(lines) if re.match(r"^####\s+\S", ln)]
+    total = 0
+    for idx, s in enumerate(starts):
+        end = len(lines)
+        for j in range(s + 1, len(lines)):
+            if re.match(r"^#{1,4}\s+\S", lines[j]):
+                end = j
+                break
+        block = "\n".join(lines[s:end]).strip()
+        # 只要"像项目条目"的块（含 技术栈/亮点/实现 关键词），跳过实习小节等
+        if not re.search(r"技术栈|技术亮点|技术实现|项目简介|项目描述|背景", block):
+            continue
+        if total + len(block) > max_chars:
+            break
+        blocks.append(block)
+        total += len(block)
+    return blocks
 
 
 def gather_material(repo_url: str = "", text: str = "") -> dict:
@@ -78,31 +148,44 @@ def gather_material(repo_url: str = "", text: str = "") -> dict:
 
 def build_project_messages(material: str, project_name: str = "",
                            profile: str = "") -> list:
-    """组装"项目分析 → 简历段"的 LLM messages。"""
-    templates = load_templates()
-    if templates:
-        tpl_block = "\n\n".join(
-            f"--- 模板范例 {i+1}：{t['name']} ---\n{t['content']}"
-            for i, t in enumerate(templates[:3])
-        )
-        tpl_directive = ("以下是用户提供的简历模板范例，**严格学习其格式/语气/排版模式**，"
-                         "输出必须与模板同款式：\n\n" + tpl_block)
+    """组装"项目分析 → 简历段"的 LLM messages（按用户材料学习格式）。"""
+    mats = load_materials()
+    sections: list[str] = []
+
+    if mats["guidance"]:
+        g = "\n\n".join(t["content"][:_MAX_GUIDANCE_CHARS] for t in mats["guidance"][:2])
+        sections.append("【写作原则（用户提供的简历写作指导，必须遵守）】\n" + g)
+
+    example_blocks: list[str] = []
+    for ex in mats["examples"][:3]:
+        example_blocks.extend(extract_project_blocks(ex["content"]))
+    if example_blocks:
+        sections.append(
+            "【格式范例（来自用户提供的真实简历，输出必须与这些条目**同款式**）】\n"
+            "⚠️ 范例只用于学习**格式/句式/排版**——范例中的技术名词、数字、机制细节"
+            "（如 JWT、原子写快照、Celery 等）与你要写的项目无关，**严禁混入输出**。\n\n"
+            + "\n\n---\n\n".join(example_blocks[:4]))
+
+    if mats["guidance"] or example_blocks:
+        sections.append(_LEARNED_PATTERN)
     else:
-        tpl_directive = ("用户暂未提供简历模板，按以下内置默认模式输出：\n\n" + _DEFAULT_PATTERN)
+        sections.append("用户暂未提供简历材料，按以下内置默认模式输出：\n\n" + _DEFAULT_PATTERN)
 
     system = (
         "你是 OfferClaw 的简历工程师，目标岗位方向：大模型应用工程师。\n"
-        "任务：从项目素材中提炼要点，生成**可直接粘贴进简历**的「项目经历」段。\n\n"
+        "任务：从项目素材中提炼要点，生成**可直接粘贴进简历**的「项目经历」条目。\n\n"
         "分析方法（先内部完成，不要输出过程）：\n"
-        "1) 项目定位：一句话讲清是什么、解决什么问题；\n"
+        "1) 项目定位：面向什么场景、解决什么问题；\n"
         "2) 技术要点：技术栈、架构、关键实现（RAG/Agent/工程化优先突出）；\n"
-        "3) 难点与解法：挑最有面试讨论价值的 1-2 个；\n"
-        "4) 量化：凡素材中有数字（性能/规模/覆盖率/star）必须用上；没有就用可验证的事实描述，"
+        "3) 难点与解法：挑最有面试讨论价值的 3-5 个，各自命名为名词短语要点名；\n"
+        "4) 量化：凡素材中有数字（性能/规模/覆盖率/指标）必须用上且只能来自素材，"
         "**绝不编造数字**。\n\n"
-        + tpl_directive +
-        "\n\n输出要求：只输出简历段本身（markdown），不要寒暄、不要解释；"
-        "中文为主，技术名词保留英文；3-5 条要点，每条一行，动词开头。"
-        + (f"\n\n用户画像（用于对齐方向与措辞）：\n{profile[:2000]}" if profile else "")
+        "【事实纪律（最高优先级）】技术栈、机制名、数字、时间**只能来自「项目素材」**；"
+        "素材没写的不要推断（时间缺失就写「时间待填」，机制内部细节素材没展开就不要替它展开）；"
+        "格式范例里的任何内容词都不属于本项目。\n\n"
+        + "\n\n".join(sections) +
+        "\n\n【输出纪律】只输出简历条目本身（markdown），不要寒暄、不要解释、不要输出分析过程。"
+        + (f"\n\n【用户画像（对齐方向与角色措辞）】\n{profile[:2000]}" if profile else "")
     )
     user = (f"项目名称：{project_name or '（素材中自行识别）'}\n\n"
             f"========== 项目素材 ==========\n{material}")

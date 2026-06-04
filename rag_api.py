@@ -245,6 +245,12 @@ class ResumeProjectRequest(BaseModel):
     project_name: str = ""
 
 
+class ResumeTemplateUploadRequest(BaseModel):
+    name: str                    # 文件名（.md/.txt）
+    content_base64: str = ""
+    text: str = ""
+
+
 class DailyResponse(BaseModel):
     today_log: str = ""
     recent_summary: str = ""
@@ -833,6 +839,60 @@ async def upsert_application_api(req: ApplicationUpsertRequest):
 # =====================================================
 # 简历：项目 → 简历项目经历段（模板学习式生成）
 # =====================================================
+
+@app.get("/api/resume/templates")
+async def list_resume_templates():
+    """已学习的简历材料清单（写作指导 + 真实简历范例）。"""
+    try:
+        from resume_project import load_materials, extract_project_blocks
+        m = load_materials()
+        n_blocks = sum(len(extract_project_blocks(e["content"])) for e in m["examples"])
+        return {
+            "status": "ok",
+            "guidance": [g["name"] for g in m["guidance"]],
+            "examples": [e["name"] for e in m["examples"]],
+            "project_blocks": n_blocks,
+        }
+    except Exception as e:
+        _log.exception("list_resume_templates failed")
+        raise HTTPException(status_code=500, detail=f"读取模板失败: {str(e)}")
+
+
+@app.post("/api/resume/templates")
+async def upload_resume_template(req: ResumeTemplateUploadRequest):
+    """上传简历材料（.md/.txt）到 resume_templates/：
+    文件名含 note/写法/指导 视为写作指导，否则视为真实简历范例（用于格式学习）。"""
+    name = (req.name or "").strip()
+    ext = os.path.splitext(name)[1].lower()
+    if ext not in (".md", ".markdown", ".txt"):
+        raise HTTPException(status_code=400, detail=f"仅支持 .md/.txt，收到 {ext or name}")
+    text = req.text or ""
+    if not text and req.content_base64:
+        try:
+            text = base64.b64decode(req.content_base64).decode("utf-8", errors="replace")
+        except Exception:
+            raise HTTPException(status_code=400, detail="文件解码失败（需 UTF-8 文本）")
+    if len(text.strip()) < 50:
+        raise HTTPException(status_code=400, detail="内容太短（≥50 字）")
+    try:
+        from resume_project import TEMPLATES_DIR
+        os.makedirs(TEMPLATES_DIR, exist_ok=True)
+        safe = re.sub(r"[^\w.\-一-鿿]+", "_", name)[:80]
+        if not safe.endswith(".md"):
+            safe = os.path.splitext(safe)[0] + ".md"
+        path = os.path.join(TEMPLATES_DIR, safe)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        from resume_project import load_materials
+        m = load_materials()
+        return {"status": "ok", "saved": safe,
+                "guidance_count": len(m["guidance"]), "example_count": len(m["examples"])}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log.exception("upload_resume_template failed")
+        raise HTTPException(status_code=500, detail=f"保存模板失败: {str(e)}")
+
 
 @app.post("/api/resume/project/stream")
 async def resume_project_stream(req: ResumeProjectRequest):
