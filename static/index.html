@@ -1086,10 +1086,13 @@
           </div>
           <textarea class="textarea" id="rpText" placeholder="③ 或直接粘贴项目介绍文本（README、项目总结等）" style="min-height:56px"></textarea>
           <div class="card-actions">
-            <button class="btn" onclick="buildResumeProject()">分析并生成简历段</button>
-            <button class="btn secondary" onclick="buildResumeForJD()">JD 定制段</button>
-            <button class="btn secondary" onclick="loadResume()">素材库</button>
+            <button class="btn" onclick="buildResumeProject(false)">分析并生成简历段</button>
+            <button class="btn secondary" onclick="buildResumeProject(true)"
+              title="结合 ② 卡片当前的 JD：优先组织 JD 考察的能力/技术栈，并在结尾给出补强建议（纯生成，不会重复写入知识库/缺口库）">JD 定制段</button>
           </div>
+          <p style="font-size:11.5px;color:var(--text-muted);margin-top:6px">
+            「JD 定制段」用法：先在 ② 粘贴 JD（跑过匹配更佳）→ 在上方提供项目素材 → 点按钮。
+            会按 JD 考察点组织亮点措辞，并在结尾附「📌 定制建议」（JD 要求但项目还不突出的能力怎么补）。</p>
           <div class="card-body" id="resumeBody" style="margin-top:12px">
             <p style="color:var(--text-muted)">生成结果会显示在这里，可直接复制进简历。</p>
           </div>
@@ -1684,73 +1687,8 @@ async function appendStructuredDaily(){
 document.getElementById('dailyFiles')?.addEventListener('change', updateDailyFileSummary);
 
 // ===== Resume =====
-async function loadResume(){
-  const body = document.getElementById('resumeBody');
-  body.innerHTML = '<div class="skeleton"></div><div class="skeleton mid"></div>';
-  setStatus('resumeStatus', 'run', '加载中');
-  markFlowRun('resume');
-  try {
-    const r = await fetch('/api/resume');
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
-    body.innerHTML = `
-      <p><strong>resume_pitch.md</strong></p>
-      <pre style="max-height:200px;overflow:auto">${escapeHtml(d.pitch||'')}</pre>
-      <p style="margin-top:12px"><strong>故事库标题</strong></p>
-      <pre>${escapeHtml(d.stories_preview||'')}</pre>`;
-    setStatus('resumeStatus', 'ok', '已加载');
-    markFlowDone('resume');
-  } catch (e) {
-    body.innerHTML = `<p style="color:var(--error)">读取失败：${escapeHtml(e.message)}</p>`;
-    setStatus('resumeStatus', 'err', '失败');
-    markFlowError('resume');
-  }
-}
-
-async function buildResumeForJD(){
-  const jd = document.getElementById('jdInput').value.trim();
-  if (!jd) { showToast('请先在 ② 卡片粘 JD 或点 URL 抽取'); return; }
-  const body = document.getElementById('resumeBody');
-  body.innerHTML = '<p><strong>JD 定制项目段（SSE 流式）</strong></p><pre id="resumeStream" class="cursor"></pre>';
-  const streamEl = document.getElementById('resumeStream');
-  setStatus('resumeStatus', 'run', '生成中');
-  markFlowRun('resume');
-  try {
-    const r = await fetch('/api/resume/build/stream', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({jd_text: jd})
-    });
-    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()));
-    const reader = r.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const {done, value} = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, {stream:true});
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6);
-        if (data === '[DONE]') {
-          streamEl.classList.remove('cursor');
-          setStatus('resumeStatus', 'ok', '已生成');
-          markFlowDone('resume');
-          return;
-        }
-        try { const c = JSON.parse(data); if (c.text) streamEl.textContent += c.text; } catch(e) {}
-      }
-    }
-    streamEl.classList.remove('cursor');
-    setStatus('resumeStatus', 'ok', '完成');
-    markFlowDone('resume');
-  } catch (e) {
-    body.innerHTML = `<p style="color:var(--error)">生成失败：${escapeHtml(e.message)}</p>`;
-    setStatus('resumeStatus', 'err', '失败');
-    markFlowError('resume');
-  }
-}
+// （旧「素材库」浏览与旧「JD 定制段」已移除：简历工坊专注"项目 → 项目经历"生成，
+//   JD 定制走 buildResumeProject(true)，结合 ② 的 JD，纯生成、不触发任何入库。）
 
 // ===== RAG ask（流式 · 知识库优先）=====
 async function ask(){
@@ -2173,19 +2111,26 @@ document.getElementById('rpFile')?.addEventListener('change', async e => {
   sum.textContent = `${f.name}（${RP_FILE_TEXT.length} 字）`;
 });
 
-async function buildResumeProject(){
+async function buildResumeProject(withJD){
   const repo = document.getElementById('rpRepo').value.trim();
   const pasted = document.getElementById('rpText').value.trim();
   const text = pasted || RP_FILE_TEXT;   // 粘贴优先，其次上传文件
   if (!repo && !text) { showToast('请提供 仓库地址 / 上传文件 / 粘贴文本 之一'); return; }
+  let jd = '';
+  if (withJD) {
+    jd = (document.getElementById('jdInput')?.value || '').trim();
+    if (!jd) { showToast('JD 定制需要先在 ② 卡片粘贴 JD（跑过匹配更佳）'); return; }
+  }
   const body = document.getElementById('resumeBody');
   body.innerHTML = '<p style="color:var(--text-muted)" id="rpMeta">⏳ 汇集项目素材…</p><pre id="rpStream" class="cursor"></pre>';
   const streamEl = document.getElementById('rpStream');
-  setStatus('resumeStatus', 'run', '生成中');
+  setStatus('resumeStatus', 'run', withJD ? 'JD 定制中' : '生成中');
+  markFlowRun('resume');
   try {
     const r = await fetch('/api/resume/project/stream', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({repo_url: repo, text: text, project_name: document.getElementById('rpName').value.trim()})
+      body: JSON.stringify({repo_url: repo, text: text, jd_text: jd,
+                            project_name: document.getElementById('rpName').value.trim()})
     });
     if (!r.ok) { const t = await r.text(); throw new Error('HTTP ' + r.status + ' ' + t); }
     const reader = r.body.getReader();
@@ -2205,11 +2150,12 @@ async function buildResumeProject(){
           body.insertAdjacentHTML('beforeend',
             '<div class="card-actions"><button class="btn secondary" onclick="navigator.clipboard.writeText(document.getElementById(\'rpStream\').textContent).then(()=>showToast(\'已复制，可直接粘贴进简历\'))">📋 复制简历段</button></div>');
           setStatus('resumeStatus', 'ok', '已生成');
+          markFlowDone('resume');
           return;
         }
         try {
           const c = JSON.parse(data);
-          if (c.meta) document.getElementById('rpMeta').textContent = `素材来源：${c.meta.origin} · 按模板模式生成中…`;
+          if (c.meta) document.getElementById('rpMeta').textContent = `素材来源：${c.meta.origin} · ${withJD ? 'JD 定制模式（含补强建议）' : '按模板模式'}生成中…`;
           else if (c.text) { streamEl.textContent += c.text; streamEl.scrollTop = streamEl.scrollHeight; }
         } catch (e) {}
       }

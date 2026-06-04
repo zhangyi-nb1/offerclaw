@@ -118,6 +118,22 @@ def test_extract_project_blocks_picks_only_project_entries():
     assert len(blocks) == 1 and "某 Agent 项目" in blocks[0]   # 实习小节（无技术栈等关键词）被跳过
 
 
+def test_build_messages_jd_mode_adds_customization(monkeypatch):
+    """jd_text 非空 → 注入 JD 定制要求 + 补强建议小节；事实纪律保留。"""
+    monkeypatch.setattr(rp, "load_materials", lambda: {"guidance": [], "examples": []})
+    msgs = rp.build_project_messages("项目素材", "X", jd_text="岗位要求：精通检索增强生成与多路召回")
+    sysm = msgs[0]["content"]
+    assert "目标 JD（定制依据）" in sysm and "精通检索增强生成" in sysm
+    assert "优先挑选并前置" in sysm and "定制建议" in sysm
+    assert "不许为迎合 JD 编造能力" in sysm
+
+
+def test_build_messages_no_jd_mode_by_default(monkeypatch):
+    monkeypatch.setattr(rp, "load_materials", lambda: {"guidance": [], "examples": []})
+    msgs = rp.build_project_messages("项目素材")
+    assert "目标 JD（定制依据）" not in msgs[0]["content"]
+
+
 def test_guidance_classified_by_filename(tmp_path, monkeypatch):
     monkeypatch.setattr(rp, "TEMPLATES_DIR", str(tmp_path))
     (tmp_path / "resume_writing_notes.md").write_text("指导内容" * 20, encoding="utf-8")

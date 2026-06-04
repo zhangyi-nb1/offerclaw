@@ -243,6 +243,7 @@ class ResumeProjectRequest(BaseModel):
     repo_url: str = ""           # 项目仓库地址（GitHub 公开仓库优先）
     text: str = ""               # 项目介绍文本（或上传文件解码后的内容）
     project_name: str = ""
+    jd_text: str = ""            # 非空→JD 定制模式：按 JD 考察点组织亮点 + 输出补强建议（纯生成，不入库）
 
 
 class ResumeTemplateUploadRequest(BaseModel):
@@ -917,7 +918,8 @@ async def resume_project_stream(req: ResumeProjectRequest):
             profile = f.read()
     except OSError:
         pass
-    messages = build_project_messages(gathered["material"], req.project_name, profile)
+    messages = build_project_messages(gathered["material"], req.project_name, profile,
+                                      jd_text=req.jd_text)
 
     async def generate():
         q: asyncio.Queue = asyncio.Queue()

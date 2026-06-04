@@ -147,8 +147,14 @@ def gather_material(repo_url: str = "", text: str = "") -> dict:
 
 
 def build_project_messages(material: str, project_name: str = "",
-                           profile: str = "") -> list:
-    """组装"项目分析 → 简历段"的 LLM messages（按用户材料学习格式）。"""
+                           profile: str = "", jd_text: str = "") -> list:
+    """组装"项目分析 → 简历段"的 LLM messages（按用户材料学习格式）。
+
+    ``jd_text`` 非空时进入 **JD 定制模式**：
+    - 内部提炼 JD 的考察能力与技术栈关键词；
+    - 技术亮点优先挑选并前置与 JD 相关的点，措辞向 JD 用词对齐（事实仍只能来自素材）；
+    - 简历段之后单独输出「定制建议」：JD 要求但项目不突出的能力 → 怎么补强。
+    本函数纯生成，不触发任何知识库/缺口库写入。"""
     mats = load_materials()
     sections: list[str] = []
 
@@ -171,6 +177,23 @@ def build_project_messages(material: str, project_name: str = "",
     else:
         sections.append("用户暂未提供简历材料，按以下内置默认模式输出：\n\n" + _DEFAULT_PATTERN)
 
+    jd_text = (jd_text or "").strip()
+    if jd_text:
+        sections.append(
+            "【目标 JD（定制依据）】\n" + jd_text[:3000] +
+            "\n\n【JD 定制要求】\n"
+            "1) 先内部提炼这份 JD 考察的能力项与技术栈关键词（不要输出提炼过程）；\n"
+            "2) 技术亮点**优先挑选并前置**与 JD 相关的能力/技术点，措辞向 JD 用词对齐"
+            "（如 JD 说「检索增强」就不要只写 RAG 缩写）——但所有事实仍**只能来自项目素材**，"
+            "不许为迎合 JD 编造能力；\n"
+            "3) 与 JD 无关的亮点压缩或舍弃，控制在 3-5 条；\n"
+            "4) 简历段结束后，另起一节输出：\n"
+            "---\n"
+            "### 📌 定制建议（仅供参考，不要放进简历）\n"
+            "逐条列出 2-4 条：「JD 要求/考察 <能力X>，当前项目素材中 <不突出/缺失>，"
+            "建议 <如何在项目中补强（具体可执行的下一步），或如何调整简历表达>」。"
+            "建议要具体到能直接动手，不要空话。")
+
     system = (
         "你是 OfferClaw 的简历工程师，目标岗位方向：大模型应用工程师。\n"
         "任务：从项目素材中提炼要点，生成**可直接粘贴进简历**的「项目经历」条目。\n\n"
@@ -182,7 +205,9 @@ def build_project_messages(material: str, project_name: str = "",
         "**绝不编造数字**。\n\n"
         "【事实纪律（最高优先级）】技术栈、机制名、数字、时间**只能来自「项目素材」**；"
         "素材没写的不要推断（时间缺失就写「时间待填」，机制内部细节素材没展开就不要替它展开）；"
-        "格式范例里的任何内容词都不属于本项目。\n\n"
+        "格式范例里的任何内容词都不属于本项目。\n"
+        "【输出前自检】逐项核对「技术栈」行：每一项必须能在「项目素材」原文中找到；"
+        "找不到的（哪怕很常见，如 Redis/MySQL/Docker）一律删除。\n\n"
         + "\n\n".join(sections) +
         "\n\n【输出纪律】只输出简历条目本身（markdown），不要寒暄、不要解释、不要输出分析过程。"
         + (f"\n\n【用户画像（对齐方向与角色措辞）】\n{profile[:2000]}" if profile else "")
