@@ -175,8 +175,8 @@ def test_merged_gaps_text_caps_injection(tmp_path, monkeypatch):
     # 注意条目须以字母区分（归一化会剥数字，纯数字差异会被判重）
     items = [f"缺少{chr(65 + i % 26)}{chr(97 + i // 26)}方向的系统实战经验与工程化落地能力补充" for i in range(60)]
     gs.add_target("岗位名称：X", {"技能缺口": items})
-    out = gs.merged_gaps_text(max_chars=1500)
-    assert len(out) < 2200 and "因注入上限省略" in out
+    out = gs.merged_gaps_text(max_chars=1000)   # 60 条 ×~24 字，1000 字必触发截断
+    assert len(out) < 1400 and "因注入上限省略" in out
     full = gs.merged_gaps_text(max_chars=100000)
     assert "因注入上限省略" not in full
 
